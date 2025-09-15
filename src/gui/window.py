@@ -5,6 +5,7 @@ from __future__ import annotations
 import queue
 import threading
 from tkinter import BOTTOM, RIGHT, X, Frame, Label, StringVar, Tk
+from tkinter import font as tkfont
 
 from config import Settings
 from gui.sections import (
@@ -39,7 +40,11 @@ class AppWindow:
         self.root.title(title)
         self.root.resizable(False, False)
         self.root.configure(bg=WINDOW_BG)
-        self.root.option_add("*Font", "Segoe UI 10")
+        self.default_font = tkfont.Font(root=self.root, family="Segoe UI", size=10)
+        self.heading_font = tkfont.Font(root=self.root, family="Segoe UI", size=14)
+        self.footer_font = tkfont.Font(root=self.root, family="Segoe UI", size=10)
+
+        self.root.option_add("*Font", self.default_font)
 
         # Texto principal
         self.text = StringVar(value="Initializing…")
@@ -54,7 +59,7 @@ class AppWindow:
         Label(
             content,
             textvariable=self.text,
-            font=("Segoe UI", 14),
+            font=self.heading_font,
             padx=16,
             pady=12,
             justify="left",
@@ -69,7 +74,7 @@ class AppWindow:
         Label(
             footer,
             text="By: JasonREDUX",
-            font=("Segoe UI", 10),
+            font=self.footer_font,
             anchor="e",
             padx=10,
             pady=5,
