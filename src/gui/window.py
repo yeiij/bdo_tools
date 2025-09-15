@@ -8,7 +8,7 @@ import platform
 import sys
 from pathlib import Path
 
-from tkinter import BOTTOM, RIGHT, X, Frame, Label, StringVar, TclError, Tk
+from tkinter import BOTTOM, RIGHT, X, Frame, Label, StringVar, TclError, Tk, PhotoImage
 from tkinter import font as tkfont
 
 from config import Settings
@@ -27,6 +27,7 @@ SURFACE_BG = "#2A2A2A"
 TEXT_PRIMARY = "#F3F4F6"
 TEXT_SECONDARY = "#A0A6B0"
 ACCENT_BORDER = "#3B3B3B"
+TEXT_FOOTER = "#303030"
 
 
 class AppWindow:
@@ -39,9 +40,7 @@ class AppWindow:
         title: str = "BDO Monitor",
     ) -> None:
         self.settings = settings or Settings()
-
         self.root = Tk()
-        self._set_window_icon(self.settings.process_name)
         self.root.title(title)
         self.root.resizable(False, False)
         self.root.configure(
@@ -56,8 +55,8 @@ class AppWindow:
 
         self.root.option_add("*Font", self.default_font)
 
-        # Texto principal
         self.text = StringVar(value="Initializing…")
+        self.root.iconphoto(False, PhotoImage(file="../resources/icon.png"))
         content = Frame(
             self.root,
             bg=SURFACE_BG,
@@ -89,7 +88,7 @@ class AppWindow:
             padx=10,
             pady=5,
             bg=WINDOW_BG,
-            fg=TEXT_SECONDARY,
+            fg=TEXT_FOOTER,
         ).pack(side=RIGHT)
 
         process_name = self.settings.process_name

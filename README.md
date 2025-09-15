@@ -30,7 +30,7 @@ python -m build
 The project can also be bundled into a standalone executable with PyInstaller:
 
 ```bash
-pyinstaller -F -w -n BDOMonitor --uac-admin src/main.py
+pyinstaller -F -w -n BDOMonitor --uac-admin --icon=resources/icon.ico src/main.py
 ```
 
 ## Command line interface
