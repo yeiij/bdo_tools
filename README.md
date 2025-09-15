@@ -79,3 +79,29 @@ section subclasses `Section` from `src/gui/sections/base.py` and exposes a
 
 With this setup you can extend the GUI by adding new section classes without
 changing the rendering loop.
+
+### Reusing the networking sections
+
+The TCP latency display is now composed from two smaller building blocks:
+
+* `IPResolverSection` (``src/gui/sections/ip_resolver.py``) resolves the
+  current public endpoints for the game client. The section exposes the
+  selected ``primary_ip`` and the tuple returned by ``resolved_ips`` so that
+  other components can reuse the discovery work.
+* `LatencySection` (``src/gui/sections/latency.py``) receives either an
+  ``IPResolverSection`` instance or a callable that yields an IP address and
+  reports the TCP statistics for that endpoint.
+
+`AppWindow` registers both sections, ensuring that the resolver runs first and
+passes the freshly resolved address to the latency probe. Future extensions can
+reuse either section individually. For example, a custom diagnostic window may
+show all resolved IPs while using a different latency visualisation:
+
+```python
+resolver = IPResolverSection("BlackDesert64.exe")
+latency = LatencySection(resolver, port=8888, samples=5)
+custom_sections = [resolver, latency]
+```
+
+The legacy `PingSection` remains available as a compatibility wrapper that
+outputs both pieces of information in a single block if needed.
