@@ -10,16 +10,35 @@ def test_is_private_ip():
 
 
 def test_get_remote_ips_for_process_filters_by_name(monkeypatch):
+    established = ip_utils.psutil.CONN_ESTABLISHED
     connections = [
-        SimpleNamespace(pid=100, raddr=SimpleNamespace(ip="203.0.113.10")),
-        SimpleNamespace(pid=101, raddr=None),
-        SimpleNamespace(pid=None, raddr=SimpleNamespace(ip="198.51.100.2")),
-        SimpleNamespace(pid=102, raddr=SimpleNamespace(ip="10.0.0.1")),
+        SimpleNamespace(
+            pid=100,
+            status=established,
+            raddr=SimpleNamespace(ip="203.0.113.10"),
+        ),
+        SimpleNamespace(pid=101, status=established, raddr=None),
+        SimpleNamespace(
+            pid=None,
+            status=established,
+            raddr=SimpleNamespace(ip="198.51.100.2"),
+        ),
+        SimpleNamespace(
+            pid=102,
+            status=established,
+            raddr=SimpleNamespace(ip="10.0.0.1"),
+        ),
+        SimpleNamespace(
+            pid=103,
+            status=ip_utils.psutil.CONN_SYN_SENT,
+            raddr=SimpleNamespace(ip="192.0.2.1"),
+        ),
     ]
 
     process_map = {
         100: SimpleNamespace(name=lambda: "Game.exe"),
         102: SimpleNamespace(name=lambda: "Other.exe"),
+        103: SimpleNamespace(name=lambda: "Game.exe"),
     }
 
     monkeypatch.setattr(ip_utils.psutil, "net_connections", lambda kind: connections)
