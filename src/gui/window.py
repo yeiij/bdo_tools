@@ -17,6 +17,13 @@ from gui.sections import (
 )
 
 
+WINDOW_BG = "#1F1F1F"
+SURFACE_BG = "#2A2A2A"
+TEXT_PRIMARY = "#F3F4F6"
+TEXT_SECONDARY = "#A0A6B0"
+ACCENT_BORDER = "#3B3B3B"
+
+
 class AppWindow:
     """Minimal GUI that shows process status, priority, affinity and TCP latency."""
 
@@ -31,21 +38,34 @@ class AppWindow:
         self.root = Tk()
         self.root.title(title)
         self.root.resizable(False, False)
+        self.root.configure(bg=WINDOW_BG)
+        self.root.option_add("*Font", "Segoe UI 10")
 
         # Texto principal
         self.text = StringVar(value="Initializing…")
-        Label(
+        content = Frame(
             self.root,
+            bg=SURFACE_BG,
+            highlightbackground=ACCENT_BORDER,
+            highlightthickness=1,
+            bd=0,
+        )
+        content.pack(fill=X, padx=16, pady=(16, 8))
+        Label(
+            content,
             textvariable=self.text,
             font=("Segoe UI", 14),
             padx=16,
             pady=12,
             justify="left",
+            anchor="w",
+            bg=SURFACE_BG,
+            fg=TEXT_PRIMARY,
         ).pack(fill=X)
 
         # Pie de página (abajo a la derecha)
-        footer = Frame(self.root)
-        footer.pack(side=BOTTOM, fill=X)
+        footer = Frame(self.root, bg=WINDOW_BG)
+        footer.pack(side=BOTTOM, fill=X, padx=16, pady=(0, 12))
         Label(
             footer,
             text="By: JasonREDUX",
@@ -53,6 +73,8 @@ class AppWindow:
             anchor="e",
             padx=10,
             pady=5,
+            bg=WINDOW_BG,
+            fg=TEXT_SECONDARY,
         ).pack(side=RIGHT)
 
         process_name = self.settings.process_name
