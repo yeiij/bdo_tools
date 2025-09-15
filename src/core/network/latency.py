@@ -39,11 +39,16 @@ def tcp_ping_stats(
     samples = tcp_ping(host, port=port, count=count, timeout=timeout)
     if not samples:
         return {}
+    if len(samples) == 1:
+        p95 = samples[0]
+    else:
+        p95 = statistics.quantiles(samples, n=100, method="inclusive")[94]
+
     return {
         "samples": float(len(samples)),
         "avg": statistics.mean(samples),
         "median": statistics.median(samples),
-        "p95": statistics.quantiles(samples, n=20)[-1] if len(samples) > 1 else samples[0],
+        "p95": p95,
     }
 
 
