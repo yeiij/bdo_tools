@@ -1,27 +1,29 @@
-"""Ping section: resolve IPs and show TCP latency statistics."""
+"""Compatibility wrapper that combines IP and latency sub-sections."""
 
 from __future__ import annotations
 
 from gui.sections.base import Section
-from core.network import get_public_remote_ips, tcp_ping_stats
+from gui.sections.ip_resolver import IPResolverSection
+from gui.sections.latency import LatencySection
 
 
 class PingSection(Section):
-    """Section that reports TCP ping information for the game server."""
+    """Render the legacy ping block using the new resolver and latency sections."""
 
     def __init__(self, process_name: str, port: int, *, samples: int = 3) -> None:
-        self.process_name = process_name
-        self.port = port
-        self.samples = samples
+        self.resolver = IPResolverSection(process_name)
+        self.latency = LatencySection(self.resolver, port, samples=samples)
 
     def render(self) -> str:
-        """Return two lines: main ping (avg only) + details (median, p95)."""
-        ips = sorted(get_public_remote_ips(self.process_name))
-        if not ips:
+        """Replicate the legacy text output using the new sections internally."""
+
+        self.resolver.render()
+        ip = self.resolver.primary_ip
+        if not ip:
             return "Ping: – • Open a channel in-game"
 
-        ip = ips[0]
-        stats = tcp_ping_stats(ip, port=self.port, count=self.samples)
+        self.latency.render()
+        stats = self.latency.last_stats
         if not stats:
             return f"Ping: {ip} • TCP failed"
 

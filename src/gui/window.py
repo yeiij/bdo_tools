@@ -9,7 +9,8 @@ from tkinter import BOTTOM, RIGHT, X, Frame, Label, StringVar, Tk
 from config import Settings
 from gui.sections import (
     AffinitySection,
-    PingSection,
+    IPResolverSection,
+    LatencySection,
     PrioritySection,
     ProcessSection,
     Section,
@@ -55,11 +56,14 @@ class AppWindow:
         ).pack(side=RIGHT)
 
         process_name = self.settings.process_name
+        resolver_section = IPResolverSection(process_name)
+        latency_section = LatencySection(resolver_section, self.settings.port)
         self.sections: list[Section] = [
             ProcessSection(process_name),
             PrioritySection(process_name),
             AffinitySection(process_name),
-            PingSection(process_name, self.settings.port),
+            resolver_section,
+            latency_section,
         ]
 
         self._q: "queue.Queue[str]" = queue.Queue()
