@@ -31,11 +31,27 @@ def get_remote_ips_for_process(process_name: str) -> Set[str]:
     return ips
 
 
+def get_process_ips(process_name: str, *, include_private: bool = False) -> Set[str]:
+    """Return remote IPs for ``process_name``.
+
+    Args:
+        process_name: Executable name to inspect.
+        include_private: When ``True`` the returned set will also contain
+            private/local addresses. When ``False`` (the default) only public
+            IPs are included.
+    """
+
+    ips = get_remote_ips_for_process(process_name)
+    if include_private:
+        return ips
+    return {ip for ip in ips if not is_private_ip(ip)}
+
+
 def get_public_remote_ips(process_name: str) -> Set[str]:
     """Return remote IPs for the process, excluding private addresses."""
-    return {ip for ip in get_remote_ips_for_process(process_name) if not is_private_ip(ip)}
+    return get_process_ips(process_name, include_private=False)
 
 
 def get_bdo_ips(process_name: str = "BlackDesert64.exe") -> Set[str]:
     """Return the set of remote IPs used by the Black Desert Online process."""
-    return get_remote_ips_for_process(process_name)
+    return get_process_ips(process_name, include_private=True)

@@ -6,6 +6,34 @@
 pyinstaller -F -w -n BDOMonitor --uac-admin src/main.py
 ```
 
+## Command line interface
+
+The project ships with a small CLI that exposes the networking helpers used by
+the GUI.
+
+```
+python -m src.cli --help
+```
+
+### Ping a host
+
+Measure the average round trip time reported by the system `ping` command:
+
+```
+python -m src.cli ping na.playblackdesert.com --count 10
+```
+
+### List remote IPs for the game client
+
+Show the public IPs currently used by the Black Desert Online process. You can
+target a different executable with `--process` and include private/local
+addresses with `--include-private` if needed.
+
+```
+python -m src.cli ips
+python -m src.cli ips --process BlackDesert64.exe --include-private
+```
+
 ## GUI sections
 
 The GUI is composed of small "sections" that render text blocks. Each
