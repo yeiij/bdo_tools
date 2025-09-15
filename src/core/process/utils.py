@@ -1,33 +1,30 @@
-# src/scripts/process_utils.py
-# Utilities to check and adjust process priority/affinity.
+"""Shared process helper utilities."""
 
 from __future__ import annotations
 
-import psutil
 import platform
 from typing import Optional
-from scripts.process_priority import get_priority_label
+
+import psutil
 
 
-def _proc_by_name(name: str) -> Optional[psutil.Process]:
+def find_process_by_name(name: str) -> Optional[psutil.Process]:
+    """Return the first process whose name matches ``name`` (case-insensitive)."""
     lname = name.lower()
-    for p in psutil.process_iter(["name"]):
+    for proc in psutil.process_iter(["name"]):
         try:
-            if (p.info.get("name") or "").lower() == lname:
-                return p
+            if (proc.info.get("name") or "").lower() == lname:
+                return proc
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
     return None
 
 
 def ensure_high_priority(process_name: str) -> bool:
-    """
-    Ensure the process runs at HIGH priority.
-    - If already HIGH/REALTIME, do nothing.
-    - If found at lower level, elevate.
-    Returns True if priority is HIGH at the end, False otherwise.
-    """
-    proc = _proc_by_name(process_name)
+    """Ensure that the named process runs with a "high" priority class."""
+    from .priority import get_priority_label  # Lazy import to avoid circular deps
+
+    proc = find_process_by_name(process_name)
     if not proc:
         return False
 

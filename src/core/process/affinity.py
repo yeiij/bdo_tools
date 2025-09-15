@@ -1,25 +1,16 @@
-# src/scripts/process_affinity.py
-# Utilities to read, format, and enforce process CPU affinity.
+"""Process CPU affinity helpers."""
 
 from __future__ import annotations
 
 from typing import List, Optional, Set
+
 import psutil
 
-
-def _proc_by_name(name: str) -> Optional[psutil.Process]:
-    lname = name.lower()
-    for p in psutil.process_iter(["name"]):
-        try:
-            if (p.info.get("name") or "").lower() == lname:
-                return p
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
-    return None
+from .utils import find_process_by_name
 
 
 def get_affinity(proc: psutil.Process) -> Optional[List[int]]:
-    """Return list of CPU indexes for the process, or None if unsupported."""
+    """Return list of CPU indexes for the process, or ``None`` if unsupported."""
     try:
         return sorted(proc.cpu_affinity())  # Windows/Linux
     except AttributeError:
@@ -30,25 +21,25 @@ def get_affinity(proc: psutil.Process) -> Optional[List[int]]:
 
 
 def get_affinity_by_name(process_name: str) -> Optional[List[int]]:
-    """Return affinity list for the first process with given name."""
-    proc = _proc_by_name(process_name)
+    """Return affinity list for the first process with the given name."""
+    proc = find_process_by_name(process_name)
     if not proc:
         return None
     return get_affinity(proc)
 
 
 def _compress_ranges(values: List[int]) -> str:
-    """Compress [0,1,2,4,5] -> '0-2,4-5'."""
+    """Compress ``[0,1,2,4,5]`` into ``"0-2,4-5"``."""
     if not values:
         return ""
     parts: List[str] = []
     start = prev = values[0]
-    for v in values[1:]:
-        if v == prev + 1:
-            prev = v
+    for value in values[1:]:
+        if value == prev + 1:
+            prev = value
             continue
         parts.append(f"{start}-{prev}" if start != prev else f"{start}")
-        start = prev = v
+        start = prev = value
     parts.append(f"{start}-{prev}" if start != prev else f"{start}")
     return ",".join(parts)
 
@@ -63,12 +54,12 @@ def format_affinity_short(affinity: Optional[List[int]]) -> str:
     return f"{_compress_ranges(affinity)} ({len(affinity)})"
 
 
-def set_affinity_range(proc: psutil.Process, start_core: int, end_core: Optional[int] = None) -> bool:
-    """
-    Set CPU affinity to cores [start_core..end_core], inclusive.
-    If end_core is None, use the last logical CPU index.
-    Returns True on success.
-    """
+def set_affinity_range(
+    proc: psutil.Process,
+    start_core: int,
+    end_core: Optional[int] = None,
+) -> bool:
+    """Set CPU affinity to cores ``[start_core..end_core]``, inclusive."""
     try:
         total = psutil.cpu_count(logical=True)
         if total is None or total <= 0:
@@ -86,12 +77,13 @@ def set_affinity_range(proc: psutil.Process, start_core: int, end_core: Optional
         return False
 
 
-def ensure_affinity_range_by_name(process_name: str, start_core: int = 2, end_core: Optional[int] = None) -> bool:
-    """
-    Ensure process has affinity [start_core..end_core] (default: from core 2 to last).
-    Returns True if affinity matches at the end (or was set successfully).
-    """
-    proc = _proc_by_name(process_name)
+def ensure_affinity_range_by_name(
+    process_name: str,
+    start_core: int = 2,
+    end_core: Optional[int] = None,
+) -> bool:
+    """Ensure the process has affinity ``[start_core..end_core]``."""
+    proc = find_process_by_name(process_name)
     if not proc:
         return False
 
