@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+from config import Settings
 from gui.window import AppWindow
 
 
 def main() -> None:
-    AppWindow().run()
+    settings = Settings.load()
+    AppWindow(settings=settings).run()
 
 
 if __name__ == "__main__":

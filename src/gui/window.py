@@ -7,14 +7,9 @@ import queue
 import threading
 from tkinter import Label, StringVar, Tk, Frame, BOTTOM, RIGHT, X
 
+from config import Settings
 from gui.sections.header import build_header_text
 from gui.sections.ping import build_ping_text
-
-
-PROCESS_NAME = "BlackDesert64.exe"
-PORT = 443
-REFRESH_MS = 2000
-POLL_MS = 250
 
 
 class AppWindow:
@@ -22,16 +17,11 @@ class AppWindow:
 
     def __init__(
         self,
+        settings: Settings | None = None,
+        *,
         title: str = "BDO Monitor",
-        process_name: str = PROCESS_NAME,
-        port: int = PORT,
-        refresh_ms: int = REFRESH_MS,
-        poll_ms: int = POLL_MS,
     ) -> None:
-        self.process_name = process_name
-        self.port = port
-        self.refresh_ms = refresh_ms
-        self.poll_ms = poll_ms
+        self.settings = settings or Settings()
 
         self.root = Tk()
         self.root.title(title)
@@ -70,8 +60,8 @@ class AppWindow:
         threading.Thread(target=self._worker_once, daemon=True).start()
 
     def _worker_once(self) -> None:
-        header = build_header_text(self.process_name)
-        ping_lines = build_ping_text(self.process_name, self.port)
+        header = build_header_text(self.settings.process_name)
+        ping_lines = build_ping_text(self.settings.process_name, self.settings.port)
         self._q.put(f"{header}\n{ping_lines}")
 
     # ----- tkinter scheduling -----
@@ -83,8 +73,8 @@ class AppWindow:
                 self.text.set(msg)
         except queue.Empty:
             pass
-        self.root.after(self.poll_ms, self._schedule_poll)
-        self.root.after(self.refresh_ms, self._kick_worker)
+        self.root.after(self.settings.poll_ms, self._schedule_poll)
+        self.root.after(self.settings.refresh_ms, self._kick_worker)
 
     def run(self) -> None:
         self.root.mainloop()
