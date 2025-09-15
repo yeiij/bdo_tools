@@ -1,6 +1,33 @@
 # BDO Tools
 
-## Build
+## Development
+
+Install the project in editable mode together with the development extras:
+
+```bash
+pip install -e .[dev]
+```
+
+### Run the test-suite
+
+Execute the unit tests with `pytest` from the repository root:
+
+```bash
+pytest
+```
+
+### Build the package
+
+Use the standard Python build frontend (install it once with `pip install build`)
+to generate an sdist and wheel in the `dist/` directory:
+
+```bash
+python -m build
+```
+
+## Build executable
+
+The project can also be bundled into a standalone executable with PyInstaller:
 
 ```bash
 pyinstaller -F -w -n BDOMonitor --uac-admin src/main.py
