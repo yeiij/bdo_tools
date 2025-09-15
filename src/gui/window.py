@@ -39,7 +39,12 @@ class AppWindow:
         self.root = Tk()
         self.root.title(title)
         self.root.resizable(False, False)
-        self.root.configure(bg=WINDOW_BG)
+        self.root.configure(
+            bg=WINDOW_BG,
+            highlightbackground=ACCENT_BORDER,
+            highlightcolor=ACCENT_BORDER,
+            highlightthickness=1,
+        )
         self.default_font = tkfont.Font(root=self.root, family="Segoe UI", size=10)
         self.heading_font = tkfont.Font(root=self.root, family="Segoe UI", size=14)
         self.footer_font = tkfont.Font(root=self.root, family="Segoe UI", size=10)
