@@ -1,12 +1,13 @@
-# src/scripts/process_priority.py
-# Utilities to read a process priority in a cross-platform way.
+"""Process priority helpers."""
 
 from __future__ import annotations
 
-from typing import Optional
-import psutil
 import platform
+from typing import Optional
 
+import psutil
+
+from .utils import find_process_by_name
 
 # Windows priority classes (values come from psutil on Windows)
 _WIN_MAP = {
@@ -19,34 +20,22 @@ _WIN_MAP = {
 }
 
 
-def _proc_by_name(name: str) -> Optional[psutil.Process]:
-    """Return the first process whose name matches (case-insensitive)."""
-    lname = name.lower()
-    for p in psutil.process_iter(["name"]):
-        try:
-            if (p.info.get("name") or "").lower() == lname:
-                return p
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
-    return None
-
-
 def get_priority_label(proc: psutil.Process) -> str:
     """Return a human-readable priority label for the given process."""
     try:
-        n = proc.nice()
+        nice_value = proc.nice()
     except (psutil.NoSuchProcess, psutil.AccessDenied):
         return "UNKNOWN"
 
     system = platform.system().lower()
     if system == "windows":
-        return _WIN_MAP.get(n, f"UNKNOWN({n})")
+        return _WIN_MAP.get(nice_value, f"UNKNOWN({nice_value})")
+
     # On Unix, .nice() is the numeric niceness (-20..19), lower is higher priority
-    # We map common ranges to labels to keep it readable.
     try:
-        niceness = int(n)
+        niceness = int(nice_value)
     except Exception:
-        return f"UNKNOWN({n})"
+        return f"UNKNOWN({nice_value})"
 
     if niceness <= -15:
         return f"HI({niceness})"
@@ -60,8 +49,8 @@ def get_priority_label(proc: psutil.Process) -> str:
 
 
 def get_priority_by_name(process_name: str) -> Optional[str]:
-    """Return the priority label for process name, or None if not found."""
-    proc = _proc_by_name(process_name)
+    """Return the priority label for the process name, or ``None`` if not found."""
+    proc = find_process_by_name(process_name)
     if not proc:
         return None
     return get_priority_label(proc)

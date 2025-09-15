@@ -3,13 +3,13 @@
 
 from __future__ import annotations
 
-from scripts.process_priority import get_priority_by_name
-from scripts.process_affinity import (
-    get_affinity_by_name,
-    format_affinity_short,
+from core.process import (
     ensure_affinity_range_by_name,
+    ensure_high_priority,
+    format_affinity_short,
+    get_affinity_by_name,
+    get_priority_by_name,
 )
-from scripts.process_utils import ensure_high_priority
 
 
 def _priority_dot(priority: str) -> str:
