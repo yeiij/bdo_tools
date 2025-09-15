@@ -1,4 +1,4 @@
-"""Main window that composes header (priority/affinity) and ping sections."""
+"""Main window that composes process, priority, affinity and ping sections."""
 
 from __future__ import annotations
 
@@ -7,13 +7,17 @@ import threading
 from tkinter import BOTTOM, RIGHT, X, Frame, Label, StringVar, Tk
 
 from config import Settings
-from gui.sections.base import Section
-from gui.sections.header import HeaderSection
-from gui.sections.ping import PingSection
+from gui.sections import (
+    AffinitySection,
+    PingSection,
+    PrioritySection,
+    ProcessSection,
+    Section,
+)
 
 
 class AppWindow:
-    """Minimal GUI that shows process priority/affinity and TCP latency."""
+    """Minimal GUI that shows process status, priority, affinity and TCP latency."""
 
     def __init__(
         self,
@@ -50,9 +54,12 @@ class AppWindow:
             pady=5,
         ).pack(side=RIGHT)
 
+        process_name = self.settings.process_name
         self.sections: list[Section] = [
-            HeaderSection(self.settings.process_name),
-            PingSection(self.settings.process_name, self.settings.port),
+            ProcessSection(process_name),
+            PrioritySection(process_name),
+            AffinitySection(process_name),
+            PingSection(process_name, self.settings.port),
         ]
 
         self._q: "queue.Queue[str]" = queue.Queue()
