@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import queue
 import threading
-from tkinter import BOTTOM, RIGHT, X, Frame, Label, StringVar, Tk
+import platform
+import sys
+from pathlib import Path
+
+from tkinter import BOTTOM, RIGHT, X, Frame, Label, StringVar, TclError, Tk
 from tkinter import font as tkfont
 
 from config import Settings
@@ -37,6 +41,7 @@ class AppWindow:
         self.settings = settings or Settings()
 
         self.root = Tk()
+        self._set_window_icon(self.settings.process_name)
         self.root.title(title)
         self.root.resizable(False, False)
         self.root.configure(
@@ -125,3 +130,103 @@ class AppWindow:
 
     def run(self) -> None:
         self.root.mainloop()
+
+    # ----- helpers -----
+
+    def _set_window_icon(self, process_name: str) -> None:
+        """Attempt to replace the default window icon with the game's icon."""
+
+        if platform.system().lower() != "windows":  # Only supported on Windows
+            return
+
+        exe_path = self._resolve_executable_path(process_name)
+        if not exe_path:
+            return
+
+        if not self._apply_windows_icon(exe_path):
+            try:
+                self.root.iconbitmap(str(exe_path))
+            except TclError:
+                return
+
+    def _resolve_executable_path(self, process_name: str) -> Path | None:
+        """Return the absolute path to the configured executable, if available."""
+
+        candidates = [
+            Path(process_name).expanduser(),
+            Path.cwd() / process_name,
+            Path(__file__).resolve().parent / process_name,
+        ]
+
+        executable = Path(sys.executable) if sys.executable else None
+        if executable is not None:
+            try:
+                candidates.append(executable.resolve().parent / process_name)
+            except OSError:
+                pass
+
+        for candidate in candidates:
+            try:
+                if candidate.is_file():
+                    return candidate.resolve()
+            except OSError:
+                continue
+
+        try:
+            from core.process import find_process_by_name
+        except Exception:
+            return None
+
+        proc = find_process_by_name(process_name)
+        if proc is None:
+            return None
+
+        try:
+            exe = proc.exe()
+        except Exception:
+            return None
+
+        if exe:
+            path = Path(exe)
+            try:
+                if path.is_file():
+                    return path.resolve()
+            except OSError:
+                return None
+        return None
+
+    def _apply_windows_icon(self, exe_path: Path) -> bool:
+        """Extract and apply the icon from ``exe_path`` using the Win32 API."""
+
+        try:
+            import ctypes
+            from ctypes import wintypes
+        except Exception:
+            return False
+
+        shell32 = ctypes.windll.shell32
+        user32 = ctypes.windll.user32
+
+        large_icons = (wintypes.HICON * 1)()
+        small_icons = (wintypes.HICON * 1)()
+        extracted = shell32.ExtractIconExW(str(exe_path), 0, large_icons, small_icons, 1)
+        if extracted <= 0:
+            return False
+
+        self.root.update_idletasks()
+        hwnd = self.root.winfo_id()
+        if not hwnd:
+            return False
+
+        WM_SETICON = 0x0080
+        ICON_BIG = 1
+        ICON_SMALL = 0
+
+        if large_icons[0]:
+            user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, large_icons[0])
+            user32.DestroyIcon(large_icons[0])
+        if small_icons[0]:
+            user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, small_icons[0])
+            user32.DestroyIcon(small_icons[0])
+
+        return True
