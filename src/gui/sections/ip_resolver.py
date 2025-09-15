@@ -44,9 +44,9 @@ class IPResolverSection(Section):
         self._primary_ip = ips[0] if ips else None
 
         if not ips:
-            return "Ping target: – • Open a channel in-game"
+            return "❌ IP – • Open a channel in-game"
         if len(ips) == 1:
-            return f"Ping target: {ips[0]}"
+            return f"✅ IP {ips[0]}"
         ip_list = ", ".join(ips)
-        return f"Ping targets: {ip_list}"
+        return f"✅ IP: {ip_list}"
 

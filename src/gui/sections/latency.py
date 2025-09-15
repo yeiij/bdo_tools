@@ -61,7 +61,6 @@ class LatencySection(Section):
         median = stats["median"]
         p95 = stats["p95"]
 
-        line1 = f"Latency: {ip} • avg={avg:.1f} ms"
-        line2 = f"Details: median={median:.1f} ms • p95={p95:.1f} ms"
-        return f"{line1}\n{line2}"
+        line1 = f"Ping: avg={avg:.1f} ms • median={median:.1f} ms • p95={p95:.1f} ms"
+        return f"{line1}"
 
