@@ -1,15 +1,15 @@
-# src/gui/window.py
-# Main window that composes header (priority/affinity) and ping sections.
+"""Main window that composes header (priority/affinity) and ping sections."""
 
 from __future__ import annotations
 
 import queue
 import threading
-from tkinter import Label, StringVar, Tk, Frame, BOTTOM, RIGHT, X
+from tkinter import BOTTOM, RIGHT, X, Frame, Label, StringVar, Tk
 
 from config import Settings
-from gui.sections.header import build_header_text
-from gui.sections.ping import build_ping_text
+from gui.sections.base import Section
+from gui.sections.header import HeaderSection
+from gui.sections.ping import PingSection
 
 
 class AppWindow:
@@ -50,6 +50,11 @@ class AppWindow:
             pady=5,
         ).pack(side=RIGHT)
 
+        self.sections: list[Section] = [
+            HeaderSection(self.settings.process_name),
+            PingSection(self.settings.process_name, self.settings.port),
+        ]
+
         self._q: "queue.Queue[str]" = queue.Queue()
         self._schedule_poll()
         self._kick_worker()
@@ -60,9 +65,8 @@ class AppWindow:
         threading.Thread(target=self._worker_once, daemon=True).start()
 
     def _worker_once(self) -> None:
-        header = build_header_text(self.settings.process_name)
-        ping_lines = build_ping_text(self.settings.process_name, self.settings.port)
-        self._q.put(f"{header}\n{ping_lines}")
+        messages = [section.render() for section in self.sections]
+        self._q.put("\n".join(messages))
 
     # ----- tkinter scheduling -----
 

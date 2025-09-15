@@ -1,8 +1,8 @@
-# src/gui/sections/header.py
-# Header line builder: priority + affinity with a simple status dot.
+"""Header section: priority + affinity with a simple status dot."""
 
 from __future__ import annotations
 
+from gui.sections.base import Section
 from core.process import (
     ensure_affinity_range_by_name,
     ensure_high_priority,
@@ -22,17 +22,19 @@ def _priority_dot(priority: str) -> str:
     return "❌"
 
 
-def build_header_text(process_name: str) -> str:
-    """
-    Ensure HIGH priority and enforce affinity from core 2 to last,
-    then build header text with current priority and affinity.
-    """
-    # Elevate priority if needed
-    ensure_high_priority(process_name)
-    # Enforce affinity [2..last]
-    ensure_affinity_range_by_name(process_name, start_core=2, end_core=None)
+class HeaderSection(Section):
+    """Section that ensures process priority/affinity and renders status."""
 
-    prio = get_priority_by_name(process_name) or "NOT RUNNING"
-    aff_str = format_affinity_short(get_affinity_by_name(process_name))
-    dot = _priority_dot(prio)
-    return f"{dot} {process_name} priority: {prio} • affinity: {aff_str}"
+    def __init__(self, process_name: str) -> None:
+        self.process_name = process_name
+
+    def render(self) -> str:
+        """Ensure process settings and return a one-line status summary."""
+        process_name = self.process_name
+        ensure_high_priority(process_name)
+        ensure_affinity_range_by_name(process_name, start_core=2, end_core=None)
+
+        prio = get_priority_by_name(process_name) or "NOT RUNNING"
+        aff_str = format_affinity_short(get_affinity_by_name(process_name))
+        dot = _priority_dot(prio)
+        return f"{dot} {process_name} priority: {prio} • affinity: {aff_str}"
