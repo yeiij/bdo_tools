@@ -21,6 +21,8 @@ def get_remote_ips_for_process(process_name: str) -> Set[str]:
     ips: Set[str] = set()
     for conn in psutil.net_connections(kind="tcp"):
         try:
+            if conn.status != psutil.CONN_ESTABLISHED:
+                continue
             if not conn.pid or not conn.raddr:
                 continue
             proc = psutil.Process(conn.pid)
