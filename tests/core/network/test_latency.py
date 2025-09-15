@@ -1,3 +1,4 @@
+import statistics
 from types import SimpleNamespace
 
 from core.network import latency
@@ -37,7 +38,17 @@ def test_tcp_ping_stats_returns_expected_keys(monkeypatch):
     stats = latency.tcp_ping_stats("example.com")
     assert stats["samples"] == 3.0
     assert stats["avg"] == 30.0
-    assert "median" in stats and "p95" in stats
+    assert stats["median"] == 30.0
+    assert stats["p95"] == statistics.quantiles([10.0, 30.0, 50.0], n=100, method="inclusive")[94]
+
+
+def test_tcp_ping_stats_handles_single_sample(monkeypatch):
+    monkeypatch.setattr(latency, "tcp_ping", lambda host, port, count, timeout: [42.0])
+    stats = latency.tcp_ping_stats("example.com")
+    assert stats["samples"] == 1.0
+    assert stats["avg"] == 42.0
+    assert stats["median"] == 42.0
+    assert stats["p95"] == 42.0
 
 
 def test_ping_host_parses_platform_specific_output(monkeypatch):
