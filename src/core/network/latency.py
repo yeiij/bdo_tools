@@ -8,7 +8,7 @@ import socket
 import statistics
 import subprocess
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 def tcp_ping(host: str, port: int = 443, count: int = 3, timeout: float = 2.0) -> List[float]:
@@ -52,6 +52,40 @@ def tcp_ping_stats(
     }
 
 
+# Common ping output patterns grouped here to make future adjustments easier.
+#
+# The goal is to extract the average latency reported by different flavours of
+# the ``ping`` command:
+#   * Unix-like systems (Linux/macOS) emit lines similar to
+#     ``rtt min/avg/max/mdev = 11.2/42.0/73.0/8.5 ms``.
+#   * Windows prints a summary where the "Average" label is localised (e.g.
+#     ``Average``, ``Promedio``, ``Moyenne``, ``Média``).
+_PING_AVERAGE_PATTERNS = (
+    re.compile(
+        r"=\s*(?:\d+(?:[.,]\d+)?/)(?P<avg>\d+(?:[.,]\d+)?)(?:/[0-9.,]+)*\s*ms",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:average|promedio|moyenne|mittelwert|durchschnitt|media|média)\s*=\s*(?P<avg>\d+(?:[.,]\d+)?)\s*ms",
+        re.IGNORECASE,
+    ),
+)
+
+
+def _extract_average_latency(output: str) -> Optional[float]:
+    """Return the average latency contained in ``ping`` command output."""
+
+    for pattern in _PING_AVERAGE_PATTERNS:
+        match = pattern.search(output)
+        if match:
+            value = match.group("avg").replace(",", ".")
+            try:
+                return float(value)
+            except ValueError:
+                continue
+    return None
+
+
 def ping_host(host: str, count: int = 5) -> float:
     """Ping a host via the system ``ping`` command and return average latency (ms)."""
     system = platform.system().lower()
@@ -63,11 +97,7 @@ def ping_host(host: str, count: int = 5) -> float:
     result = subprocess.run(cmd, capture_output=True, text=True)
     output = result.stdout
 
-    if system == "windows":
-        match = re.search(r"Average = (\d+)ms", output)
-    else:
-        match = re.search(r"avg = [\d.]+/([\d.]+)/", output)
-
-    if match:
-        return float(match.group(1))
+    average = _extract_average_latency(output)
+    if average is not None:
+        return average
     return -1.0
