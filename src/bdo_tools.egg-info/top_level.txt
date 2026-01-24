@@ -1,0 +1,8 @@
+cli
+config
+core
+domain
+gui
+infrastructure
+main
+ui
