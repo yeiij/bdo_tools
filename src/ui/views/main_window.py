@@ -165,8 +165,8 @@ class MainWindow(ttk.Frame):
 
     def on_optimize(self):
         if self.vm.optimize_process():
-            # Flash success feedback or simple update
-            pass
+            self.optimized_success = True
+            self.update_view()
 
     def refresh_loop(self):
         self.vm.refresh()
@@ -202,10 +202,27 @@ class MainWindow(ttk.Frame):
         else:
             self.admin_label.pack_forget() # Hide if admin
             
-            if self.vm.status != ProcessStatus.RUNNING:
+            # Disable if not running OR if successfully optimized
+            if self.vm.status != ProcessStatus.RUNNING or getattr(self, "optimized_success", False):
                 self.optimize_btn.state(["disabled"])
             else:
                 self.optimize_btn.state(["!disabled"])
+
+            # Colorize Priority/Affinity if optimized
+            is_optimized = getattr(self, "optimized_success", False)
+            success_color = "#00ff00" # Bright Green
+            default_color = "#ffffff"
+            
+            # Priority Color
+            # If manually set to High outside app, also show green? 
+            # User request: "appear in green the result".
+            # We'll use the flag for consistency with the button behavior.
+            p_color = success_color if is_optimized else default_color
+            self.priority_val_label.config(foreground=p_color)
+
+            # Affinity Color
+            a_color = success_color if is_optimized else default_color
+            self.affinity_val_label.config(foreground=a_color)
 
         # Update Table
         # Clear existing
