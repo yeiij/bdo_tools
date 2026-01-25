@@ -28,11 +28,18 @@ It provides real-time latency monitoring by distinguishing actual game traffic f
 
 If you want to compile the BDO Monitor executable yourself, follow these steps. No programming knowledge is required!
 
-### 1. Install Python 3.14
+### ⚡ Quick Guide (Windows)
+
+1.  **Download Source**:
+    ```powershell
+    git clone https://github.com/yeiij/bdo_tools
+    cd bdo_tools
+    ```
+2.  **Install Python 3.14**
 - Go to [python.org/downloads](https://www.python.org/downloads/windows/) and download the **Python 3.14** installer.
 - **IMPORTANT**: During installation, check the box that says **"Add Python to PATH"**.
 
-### 2. Install Project Manager (uv)
+### 3. Install Project Manager (uv)
 - Open **PowerShell** (Click Start, type `powershell`).
 - Copy and paste the following command and hit Enter:
   ```powershell
