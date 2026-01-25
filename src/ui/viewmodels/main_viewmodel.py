@@ -59,8 +59,17 @@ class MainViewModel:
     def _annotate_connections(self, connections: List[ConnectionInfo]):
         """Apply custom annotations to connections (e.g. ExitLag)."""
         for c in connections:
-            if c.remote_port == 60774:
+            # Heuristic: ExitLag proxies via localhost on high ports.
+            # If standard web ports (80, 443) on localhost, it's likely local web server/service.
+            # If non-standard port on localhost, assume it's ExitLag/Proxy for BDO.
+            if c.remote_ip in ("127.0.0.1", "::1", "localhost"):
+                 if c.remote_port not in (80, 443):
+                     c.remote_ip = "ExitLag"
+                     c.service_name = "Game Server"
+            # Legacy check just in case
+            elif c.remote_port == 60774:
                 c.remote_ip = "ExitLag"
+                c.service_name = "Game Server"
 
     def _enforce_policies(self):
         """Enforce target priority and affinity if they drift."""
@@ -83,7 +92,7 @@ class MainViewModel:
         
         game_latencies = [
             c.latency_ms for c in self.connections 
-            if c.latency_ms and is_game_port(c.remote_port)
+            if c.latency_ms and "Game Server" in c.service_name
         ]
         
         if game_latencies:

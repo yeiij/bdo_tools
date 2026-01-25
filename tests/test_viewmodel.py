@@ -33,7 +33,7 @@ class TestMainViewModel(unittest.TestCase):
             remote_ip="2.2.2.2", 
             remote_port=8888, 
             status="EST", 
-            service_name="Game", 
+            service_name="Game Server", 
             latency_ms=50.0
         )
         self.mock_network.get_connections.return_value = [conn]
@@ -74,14 +74,29 @@ class TestMainViewModel(unittest.TestCase):
     def test_exitlag_annotation(self):
         self.mock_process.get_status.return_value = ProcessStatus.RUNNING
         self.mock_process.get_pid.return_value = 123
-        conn = ConnectionInfo(123, "1.1.1.1", 100, "127.0.0.1", 60774, "EST", "Game")
-        self.mock_network.get_connections.return_value = [conn]
+        
+        
+        # Case 1: Dynamic Port (Localhost + Random High Port)
+        conn1 = ConnectionInfo(123, "127.0.0.1", 50000, "127.0.0.1", 53600, "EST", "Unknown") # ExitLag
+        # Case 2: Standard Localhost (Web/Auth) -> Should remain IP
+        conn2 = ConnectionInfo(123, "127.0.0.1", 50000, "127.0.0.1", 443, "EST", "Web") # Not ExitLag
+        # Case 3: Legacy Fixed Port
+        conn3 = ConnectionInfo(123, "127.0.0.1", 50000, "10.0.0.5", 60774, "EST", "Old") # Legacy
+        
+        self.mock_network.get_connections.return_value = [conn1, conn2, conn3]
         
         # Refresh 2 times to trigger network update
         self.vm.refresh()
         self.vm.refresh()
         
         self.assertEqual(self.vm.connections[0].remote_ip, "ExitLag")
+        self.assertEqual(self.vm.connections[0].service_name, "Game Server")
+        
+        self.assertEqual(self.vm.connections[1].remote_ip, "127.0.0.1")
+        self.assertNotEqual(self.vm.connections[1].service_name, "Game Server")
+        
+        self.assertEqual(self.vm.connections[2].remote_ip, "ExitLag")
+        self.assertEqual(self.vm.connections[2].service_name, "Game Server")
 
     def test_priority_watchdog(self):
         self.mock_process.get_status.return_value = ProcessStatus.RUNNING
