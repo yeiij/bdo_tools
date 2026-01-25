@@ -49,7 +49,7 @@ class TestPsutilProcessService(unittest.TestCase):
         with patch.object(self.service, 'get_pid', return_value=123):
              with patch('platform.system', return_value="Windows"):
                  with patch('psutil.HIGH_PRIORITY_CLASS', 128, create=True):
-                    result = self.service.set_priority('test.exe', True)
+                    result = self.service.set_priority('test.exe', "High")
                     self.assertTrue(result)
                     mock_proc.nice.assert_called_with(128)
 
@@ -202,17 +202,29 @@ class TestPsutilProcessService(unittest.TestCase):
              
              with patch('psutil.NORMAL_PRIORITY_CLASS', 32, create=True):
                  with patch.object(self.service, 'get_pid', return_value=123):
-                     self.service.set_priority('foo', False)
+                     self.service.set_priority('foo', "Normal")
                      p.nice.assert_called_with(32)
     def test_set_priority_no_pid(self):
         with patch.object(self.service, 'get_pid', return_value=None):
-            self.assertFalse(self.service.set_priority('foo', True))
+            self.assertFalse(self.service.set_priority('foo', "High"))
 
     @patch('psutil.Process')
     def test_set_priority_error(self, mock_cls):
         mock_cls.side_effect = psutil.AccessDenied(123)
         with patch.object(self.service, 'get_pid', return_value=123):
-            self.assertFalse(self.service.set_priority('foo', True))
+            self.assertFalse(self.service.set_priority('foo', "High"))
+            
+    @patch('psutil.Process')
+    def test_set_priority_invalid_input(self, mock_cls):
+        mock_cls.return_value = MagicMock()
+        with patch.object(self.service, 'get_pid', return_value=123):
+            with patch('platform.system', return_value="Windows"):
+                # "Invalid" is not in the mapping
+                self.assertFalse(self.service.set_priority('foo', "Invalid"))
+
+    def test_get_cpu_count_fallback(self):
+        with patch('psutil.cpu_count', return_value=None):
+            self.assertEqual(self.service.get_cpu_count(), 1)
             
     @patch('psutil.Process')
     def test_set_priority_linux(self, mock_cls):
@@ -220,9 +232,9 @@ class TestPsutilProcessService(unittest.TestCase):
             p = MagicMock()
             mock_cls.return_value = p
             with patch.object(self.service, 'get_pid', return_value=123):
-                self.service.set_priority('foo', True)
+                self.service.set_priority('foo', "High")
                 p.nice.assert_called_with(-10) # High
-                self.service.set_priority('foo', False)
+                self.service.set_priority('foo', "Normal")
                 p.nice.assert_called_with(0) # Normal
 
     def test_set_affinity_no_pid(self):

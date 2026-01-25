@@ -7,7 +7,7 @@ from ui.views.main_window import start_app
 
 def main():
     # 1. Configuration
-    settings = AppSettings()
+    settings = AppSettings.load()
     
     # 2. Infrastructure Services
     process_service = PsutilProcessService()

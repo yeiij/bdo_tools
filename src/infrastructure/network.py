@@ -45,8 +45,8 @@ class TcpNetworkService(INetworkService):
                 remote_ip, remote_port = c.raddr
                 local_ip, local_port = c.laddr
                 
-                # Simple synchronous ping (should ideally be async or cached)
-                latency = tcp_ping(remote_ip, remote_port)
+                # Simple synchronous ping (low timeout to prevent UI freeze)
+                latency = tcp_ping(remote_ip, remote_port, timeout=0.2)
                 
                 info = ConnectionInfo(
                     pid=pid,

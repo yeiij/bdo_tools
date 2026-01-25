@@ -20,42 +20,65 @@ class MainViewModel:
         self.connections: List[ConnectionInfo] = []
         self.game_latency: Optional[float] = None
         self.priority: str = "Unknown"
+        self.target_priority: Optional[str] = settings.target_priority
+        self.target_affinity: Optional[List[int]] = settings.target_affinity
         self.affinity: List[int] = []
         self.pid: Optional[int] = None
         
+        self._refresh_count = 0
+        
         self.is_admin = self._process_service.is_admin()
         
-    def optimize_process(self) -> bool:
-        """Set High Priority and exclude cores 0,1."""
-        if not self.pid:
-            return False
-        
-        # Priority
-        self._process_service.set_priority(self.settings.process_name, high=True)
-        
-        # Affinity (Exclude 0 and 1 if we have enough cores)
-        import psutil
-        total_cores = psutil.cpu_count(logical=True) or 4
-        if total_cores > 2:
-            desired_cores = list(range(2, total_cores))
-            self._process_service.set_affinity(self.settings.process_name, cores=desired_cores)
-        
-        self.refresh()
-        return True
-
     def refresh(self):
         """Update state."""
+        self._update_process_state()
+        self._update_network_state()
+        self._enforce_policies()
+        self._calculate_metrics()
+
+    def _update_process_state(self):
+        """Update process status, PID, priority, affinity, and CPU count."""
         self.status = self._process_service.get_status(self.settings.process_name)
         self.pid = self._process_service.get_pid(self.settings.process_name)
         self.priority = self._process_service.get_priority(self.settings.process_name)
         self.affinity = self._process_service.get_affinity(self.settings.process_name)
-        
-        if self.pid:
-            self.connections = self._network_service.get_connections(self.pid)
-        else:
+        self.cpu_count = self._process_service.get_cpu_count()
+
+    def _update_network_state(self):
+        """Update network connections with throttling."""
+        self._refresh_count += 1
+        # Throttled: Every 2nd refresh (approx 10s if poll is 5s)
+        if self.pid and self._refresh_count % 2 == 0:
+            conns = self._network_service.get_connections(self.pid)
+            # Annotate ExitLag IP
+            self._annotate_connections(conns)
+            self.connections = conns
+        elif not self.pid:
             self.connections = []
 
-        # Calculate Game Latency
+    def _annotate_connections(self, connections: List[ConnectionInfo]):
+        """Apply custom annotations to connections (e.g. ExitLag)."""
+        for c in connections:
+            if c.remote_port == 60774:
+                c.remote_ip = "ExitLag"
+
+    def _enforce_policies(self):
+        """Enforce target priority and affinity if they drift."""
+        if self.status != ProcessStatus.RUNNING:
+            return
+
+        # Enforce Priority
+        if self.target_priority and self.priority != self.target_priority:
+            self._process_service.set_priority(self.settings.process_name, self.target_priority)
+            self.priority = self._process_service.get_priority(self.settings.process_name)
+
+        # Enforce Affinity
+        if self.target_affinity and self.affinity and sorted(self.affinity) != sorted(self.target_affinity):
+            self._process_service.set_affinity(self.settings.process_name, self.target_affinity)
+            self.affinity = self._process_service.get_affinity(self.settings.process_name)
+
+    def _calculate_metrics(self):
+        """Calculate derived metrics like Game Latency."""
         from infrastructure.services_map import is_game_port
         
         game_latencies = [
@@ -64,7 +87,28 @@ class MainViewModel:
         ]
         
         if game_latencies:
-            import statistics
-            self.game_latency = statistics.mean(game_latencies)
+            self.game_latency = max(game_latencies)
         else:
             self.game_latency = None
+
+    def set_manual_priority(self, priority: str):
+        """Set a specific priority and enable enforcement."""
+        self.target_priority = priority
+        self.settings.target_priority = priority
+        self.settings.save()
+        # Apply immediately
+        self._process_service.set_priority(self.settings.process_name, priority)
+        self.refresh()
+
+    def set_affinity(self, cores: List[int]) -> bool:
+        if not self.pid:
+            return False
+            
+        success = self._process_service.set_affinity(self.settings.process_name, cores)
+        if success:
+            self.settings.target_affinity = cores
+            self.settings.save()
+            self.refresh()
+        return success
+        
+

@@ -1,0 +1,9 @@
+[run]
+source = src
+omit =
+    src/main.py
+    src/ui/views/main_window.py
+
+[report]
+show_missing = True
+precision = 2

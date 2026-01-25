@@ -24,20 +24,39 @@ It provides real-time latency monitoring by distinguishing actual game traffic f
 -   **Python**: 3.10 or higher
 -   **Package Manager**: `uv` (recommended) or `pip`
 
-## 🚀 Installation (Source)
+## How to Build (For Windows Users)
 
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/yeiij/bdo_tools.git
-    cd bdo_tools
-    ```
+If you want to compile the BDO Monitor executable yourself, follow these steps. No programming knowledge is required!
 
-2.  **Install dependencies**:
-    ```bash
-    make install
-    # OR using pip directly:
-    # pip install -r requirements.txt
-    ```
+### 1. Install Python 3.14
+- Go to [python.org/downloads](https://www.python.org/downloads/windows/) and download the **Python 3.14** installer.
+- **IMPORTANT**: During installation, check the box that says **"Add Python to PATH"**.
+
+### 2. Install Project Manager (uv)
+- Open **PowerShell** (Click Start, type `powershell`).
+- Copy and paste the following command and hit Enter:
+  ```powershell
+  powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+  ```
+- Restart PowerShell after it completes.
+
+### 3. Compile the App
+- Open PowerShell in the folder where you downloaded the BDO Tools source code.
+- Run the following command to start the build:
+  ```powershell
+  uv run python build_exe.py
+  ```
+- Once it finishes, you will find your executable in the `dist` folder named **"BDO Monitor.exe"**.
+
+---
+
+## Development
+
+If you are a developer, you can use the provided `Makefile` for standard tasks:
+- `make run`: Run the application.
+- `make test`: Run unit tests.
+- `make coverage`: Check test coverage.
+- `make build`: Compile the executable.
 
 ## ▶️ Usage
 

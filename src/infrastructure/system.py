@@ -63,25 +63,41 @@ class PsutilProcessService(IProcessService):
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             return []
 
-    def set_priority(self, process_name: str, high: bool) -> bool:
+    def set_priority(self, process_name: str, priority: str) -> bool:
         pid = self.get_pid(process_name)
         if not pid:
             return False
         
         try:
             p = psutil.Process(pid)
-            if high:
-                if platform.system() == "Windows":
-                    p.nice(psutil.HIGH_PRIORITY_CLASS)
-                else:
-                    p.nice(-10) # Unix high priority (requires root usually, unlikely to work without sudo)
+            if platform.system() == "Windows":
+                mapping = {
+                    "Idle": psutil.IDLE_PRIORITY_CLASS,
+                    "Below Normal": psutil.BELOW_NORMAL_PRIORITY_CLASS,
+                    "Normal": psutil.NORMAL_PRIORITY_CLASS,
+                    "Above Normal": psutil.ABOVE_NORMAL_PRIORITY_CLASS,
+                    "High": psutil.HIGH_PRIORITY_CLASS,
+                    "Realtime": psutil.REALTIME_PRIORITY_CLASS
+                }
+                # Case-insensitive lookup
+                target_val = None
+                for k, v in mapping.items():
+                    if k.lower() == priority.lower():
+                        target_val = v
+                        break
+                
+                if target_val is None:
+                    # Fallback or error? defaulting to Normal if unknown is safer, 
+                    # but returning False is more correct for "invalid input"
+                    return False
+                    
+                p.nice(target_val)
             else:
-                if platform.system() == "Windows":
-                    p.nice(psutil.NORMAL_PRIORITY_CLASS)
-                else:
-                    p.nice(0)
+                # Unix fallback (simple)
+                p.nice(0 if priority.lower() == "normal" else -10)
+                
             return True
-        except (psutil.AccessDenied, psutil.NoSuchProcess):
+        except (psutil.AccessDenied, psutil.NoSuchProcess, ValueError):
             return False
 
     def set_affinity(self, process_name: str, cores: List[int]) -> bool:
@@ -101,3 +117,6 @@ class PsutilProcessService(IProcessService):
             return ctypes.windll.shell32.IsUserAnAdmin() != 0
         except Exception:
             return False
+
+    def get_cpu_count(self) -> int:
+        return psutil.cpu_count(logical=True) or 1

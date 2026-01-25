@@ -1,6 +1,6 @@
 
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from ui.viewmodels.main_viewmodel import MainViewModel
 from domain.models import AppSettings, ConnectionInfo, ProcessStatus
 
@@ -38,7 +38,8 @@ class TestMainViewModel(unittest.TestCase):
         )
         self.mock_network.get_connections.return_value = [conn]
         
-        # Action
+        # Action (Call twice because network is throttled to every 2nd refresh)
+        self.vm.refresh()
         self.vm.refresh()
         
         # Assert
@@ -57,24 +58,74 @@ class TestMainViewModel(unittest.TestCase):
         self.assertIsNone(self.vm.pid)
         self.assertEqual(self.vm.connections, [])
 
-    def test_optimize_success(self):
-        self.vm.pid = 1234 # Must be set to allow optimization
-        self.mock_process.set_priority.return_value = True
-        self.mock_process.set_affinity.return_value = True
+    def test_refresh_throttling_logic(self):
+        self.mock_process.get_status.return_value = ProcessStatus.RUNNING
+        self.mock_process.get_pid.return_value = 123
+        self.mock_network.get_connections.return_value = []
         
-        # Mock psutil.cpu_count for affinity logic
-        # Since the code imports psutil inside the method, patching psutil.cpu_count visible to that import is tricky
-        # if the test runner has already imported psutil.
-        # But usually patch('psutil.cpu_count') works if we do it globally.
+        # 1st refresh: count=1, 1%2 != 0 -> No network poll
+        self.vm.refresh()
+        self.mock_network.get_connections.assert_not_called()
         
-        from unittest.mock import patch
-        with patch('psutil.cpu_count', return_value=8):
-            result = self.vm.optimize_process()
-            self.assertTrue(result)
-            self.mock_process.set_priority.assert_called_with("Test.exe", high=True)
-            self.mock_process.set_affinity.assert_called()
+        # 2nd refresh: count=2, 2%2 == 0 -> Network poll
+        self.vm.refresh()
+        self.mock_network.get_connections.assert_called_once()
 
-    def test_optimize_fail_no_pid(self):
+    def test_exitlag_annotation(self):
+        self.mock_process.get_status.return_value = ProcessStatus.RUNNING
+        self.mock_process.get_pid.return_value = 123
+        conn = ConnectionInfo(123, "1.1.1.1", 100, "127.0.0.1", 60774, "EST", "Game")
+        self.mock_network.get_connections.return_value = [conn]
+        
+        # Refresh 2 times to trigger network update
+        self.vm.refresh()
+        self.vm.refresh()
+        
+        self.assertEqual(self.vm.connections[0].remote_ip, "ExitLag")
+
+    def test_priority_watchdog(self):
+        self.mock_process.get_status.return_value = ProcessStatus.RUNNING
+        self.vm.target_priority = "High"
+        self.vm.priority = "Normal" # Drift
+        
+        self.vm.refresh()
+        
+        self.mock_process.set_priority.assert_called_with(self.settings.process_name, "High")
+
+    def test_affinity_watchdog(self):
+        self.mock_process.get_status.return_value = ProcessStatus.RUNNING
+        self.vm.target_affinity = [0, 1]
+        self.vm.affinity = [0, 1, 2, 3] # Drift
+        
+        self.vm.refresh()
+        
+        self.mock_process.set_affinity.assert_called_with(self.settings.process_name, [0, 1])
+
+    def test_set_manual_priority(self):
+        with patch.object(self.settings, 'save') as mock_save:
+            self.vm.set_manual_priority("High")
+            self.assertEqual(self.vm.target_priority, "High")
+            self.assertEqual(self.settings.target_priority, "High")
+            mock_save.assert_called_once()
+            self.mock_process.set_priority.assert_called_with(self.settings.process_name, "High")
+
+    def test_set_affinity_success(self):
+        self.vm.pid = 123
+        self.mock_process.set_affinity.return_value = True
+        with patch.object(self.settings, 'save') as mock_save:
+            result = self.vm.set_affinity([2, 3])
+            self.assertTrue(result)
+            self.assertEqual(self.settings.target_affinity, [2, 3])
+            mock_save.assert_called_once()
+
+    def test_set_affinity_no_pid(self):
         self.vm.pid = None
-        result = self.vm.optimize_process()
+        result = self.vm.set_affinity([0])
         self.assertFalse(result)
+
+    def test_set_affinity_fail(self):
+        self.vm.pid = 123
+        self.mock_process.set_affinity.return_value = False
+        result = self.vm.set_affinity([0])
+        self.assertFalse(result)
+
