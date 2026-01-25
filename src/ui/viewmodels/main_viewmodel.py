@@ -115,6 +115,7 @@ class MainViewModel:
             
         success = self._process_service.set_affinity(self.settings.process_name, cores)
         if success:
+            self.target_affinity = cores
             self.settings.target_affinity = cores
             self.settings.save()
             self.refresh()

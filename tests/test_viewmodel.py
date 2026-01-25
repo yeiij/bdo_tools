@@ -131,6 +131,7 @@ class TestMainViewModel(unittest.TestCase):
             result = self.vm.set_affinity([2, 3])
             self.assertTrue(result)
             self.assertEqual(self.settings.target_affinity, [2, 3])
+            self.assertEqual(self.vm.target_affinity, [2, 3]) # Verify runtime update
             mock_save.assert_called_once()
 
     def test_set_affinity_no_pid(self):
