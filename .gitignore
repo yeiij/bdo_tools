@@ -13,6 +13,9 @@ ENV/
 build/
 dist/
 *.spec
+*.egg-info/
+htmlcov/
+.coverage
 
 # IDEs
 .idea/

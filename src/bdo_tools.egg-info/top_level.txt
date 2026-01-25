@@ -1,6 +1,0 @@
-cli
-config
-domain
-infrastructure
-main
-ui
