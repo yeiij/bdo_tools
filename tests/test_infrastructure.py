@@ -47,8 +47,13 @@ class TestPsutilProcessService(unittest.TestCase):
         
         # Determine PID first (mocked internally or by helper)
         with patch.object(self.service, 'get_pid', return_value=123):
-             with patch('platform.system', return_value="Windows"):
-                 with patch('psutil.HIGH_PRIORITY_CLASS', 128, create=True):
+            with patch('platform.system', return_value="Windows"):
+                with patch('psutil.IDLE_PRIORITY_CLASS', 64, create=True), \
+                        patch('psutil.BELOW_NORMAL_PRIORITY_CLASS', 16384, create=True), \
+                        patch('psutil.NORMAL_PRIORITY_CLASS', 32, create=True), \
+                        patch('psutil.ABOVE_NORMAL_PRIORITY_CLASS', 32768, create=True), \
+                        patch('psutil.HIGH_PRIORITY_CLASS', 128, create=True), \
+                        patch('psutil.REALTIME_PRIORITY_CLASS', 256, create=True):
                     result = self.service.set_priority('test.exe', "High")
                     self.assertTrue(result)
                     mock_proc.nice.assert_called_with(128)
@@ -200,7 +205,12 @@ class TestPsutilProcessService(unittest.TestCase):
              p = MagicMock()
              mock_cls.return_value = p
              
-             with patch('psutil.NORMAL_PRIORITY_CLASS', 32, create=True):
+             with patch('psutil.IDLE_PRIORITY_CLASS', 64, create=True), \
+                     patch('psutil.BELOW_NORMAL_PRIORITY_CLASS', 16384, create=True), \
+                     patch('psutil.NORMAL_PRIORITY_CLASS', 32, create=True), \
+                     patch('psutil.ABOVE_NORMAL_PRIORITY_CLASS', 32768, create=True), \
+                     patch('psutil.HIGH_PRIORITY_CLASS', 128, create=True), \
+                     patch('psutil.REALTIME_PRIORITY_CLASS', 256, create=True):
                  with patch.object(self.service, 'get_pid', return_value=123):
                      self.service.set_priority('foo', "Normal")
                      p.nice.assert_called_with(32)
@@ -219,8 +229,14 @@ class TestPsutilProcessService(unittest.TestCase):
         mock_cls.return_value = MagicMock()
         with patch.object(self.service, 'get_pid', return_value=123):
             with patch('platform.system', return_value="Windows"):
-                # "Invalid" is not in the mapping
-                self.assertFalse(self.service.set_priority('foo', "Invalid"))
+                with patch('psutil.IDLE_PRIORITY_CLASS', 64, create=True), \
+                     patch('psutil.BELOW_NORMAL_PRIORITY_CLASS', 16384, create=True), \
+                     patch('psutil.NORMAL_PRIORITY_CLASS', 32, create=True), \
+                     patch('psutil.ABOVE_NORMAL_PRIORITY_CLASS', 32768, create=True), \
+                     patch('psutil.HIGH_PRIORITY_CLASS', 128, create=True), \
+                     patch('psutil.REALTIME_PRIORITY_CLASS', 256, create=True):
+                    # "Invalid" is not in the mapping
+                    self.assertFalse(self.service.set_priority('foo', "Invalid"))
 
     def test_get_cpu_count_fallback(self):
         with patch('psutil.cpu_count', return_value=None):
