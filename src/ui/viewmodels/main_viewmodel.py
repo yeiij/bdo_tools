@@ -5,6 +5,8 @@ from domain.models import ConnectionInfo, ProcessStatus, AppSettings
 from domain.services import IProcessService, INetworkService
 
 
+from infrastructure.gpu import NvidiaGpuService
+
 class MainViewModel:
     def __init__(
         self,
@@ -16,6 +18,9 @@ class MainViewModel:
         self._network_service = network_service
         self.settings = settings
         
+        # GPU Service
+        self._gpu_service = NvidiaGpuService()
+        
         self.status = ProcessStatus.UNKNOWN
         self.connections: List[ConnectionInfo] = []
         self.game_latency: Optional[float] = None
@@ -25,6 +30,7 @@ class MainViewModel:
         self.affinity: List[int] = []
         self.pid: Optional[int] = None
         self.memory_usage_str: str = "-"
+        self.vram_usage_bytes: float = 0.0
         self.cpu_usage_str: str = "0%"
         
         self._refresh_count = 0
@@ -38,6 +44,13 @@ class MainViewModel:
         self._enforce_policies()
         self._calculate_metrics()
 
+    @property
+    def vram_usage_str(self) -> str:
+        if not self._gpu_service.is_available():
+            # Hide completely if not available or return special string
+            return "N/A"
+        return f"{self.vram_usage_bytes / (1024**3):.1f} GB"
+
     def _update_process_state(self):
         """Update process status, PID, priority, affinity, and CPU count."""
         self.status = self._process_service.get_status(self.settings.process_name)
@@ -48,6 +61,12 @@ class MainViewModel:
         
         mem_bytes = self._process_service.get_memory_usage(self.settings.process_name)
         cpu_pct = self._process_service.get_cpu_percent(self.settings.process_name)
+        
+        # VRAM
+        if self.pid:
+            self.vram_usage_bytes = self._gpu_service.get_vram_usage(self.pid)
+        else:
+            self.vram_usage_bytes = 0.0
         
         self.memory_usage_str = f"{mem_bytes / (1024**3):.1f} GB" if mem_bytes else "-"
         self.cpu_usage_str = f"{cpu_pct:.1f}%" if cpu_pct is not None else "0%"

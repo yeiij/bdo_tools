@@ -183,6 +183,13 @@ class MainWindow(ttk.Frame):
         # Divider
         ttk.Label(top_row, text=" | ", font=UIConstants.FONT_HEADER, foreground=UIConstants.FG_GREY).pack(side=tk.LEFT, padx=10)
 
+        # VRAM
+        self.vram_label = ttk.Label(top_row, text="VRAM: -", font=UIConstants.FONT_HEADER, foreground=UIConstants.FG_WHITE)
+        self.vram_label.pack(side=tk.LEFT)
+
+        # Divider
+        ttk.Label(top_row, text=" | ", font=UIConstants.FONT_HEADER, foreground=UIConstants.FG_GREY).pack(side=tk.LEFT, padx=10)
+
         # CPU
         self.cpu_label = ttk.Label(top_row, text="Proc: -", font=UIConstants.FONT_HEADER, foreground=UIConstants.FG_WHITE)
         self.cpu_label.pack(side=tk.LEFT)
@@ -405,6 +412,7 @@ class MainWindow(ttk.Frame):
         
         # Update Stats
         self.ram_label.config(text=f"RAM: {self.vm.memory_usage_str}")
+        self.vram_label.config(text=f"VRAM: {self.vm.vram_usage_str}")
         self.cpu_label.config(text=f"Proc: {self.vm.cpu_usage_str}")
              
         # Update Affinity
