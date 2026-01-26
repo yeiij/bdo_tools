@@ -151,8 +151,12 @@ class PsutilProcessService(IProcessService):
                 # First call always returns 0.0, so we might return 0.0 initially
             
             # interval=None calculates since last call (non-blocking)
+            # psutil returns > 100% for multi-core. Task Manager shows % of Total CPU.
+            # We divide by logical CPU count to match Task Manager.
             val = proc.cpu_percent(interval=None)
-            return val or 0.0
+            if val:
+                return val / psutil.cpu_count(logical=True)
+            return 0.0
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             # Process died, remove from cache
             if pid in self._proc_cache:

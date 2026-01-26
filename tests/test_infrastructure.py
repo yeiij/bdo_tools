@@ -297,13 +297,15 @@ class TestPsutilProcessService(unittest.TestCase):
              self.assertEqual(self.service.get_memory_usage('test'), 2000)
 
     @patch('psutil.Process')
-    def test_get_cpu_percent_success(self, mock_cls):
+    @patch('psutil.cpu_count')
+    def test_get_cpu_percent_success(self, mock_count, mock_cls):
         p = MagicMock()
-        p.cpu_percent.return_value = 15.5
+        p.cpu_percent.return_value = 16.0
         mock_cls.return_value = p
+        mock_count.return_value = 4
         
         with patch.object(self.service, 'get_pid', return_value=123):
-             self.assertEqual(self.service.get_cpu_percent('test'), 15.5)
+             self.assertEqual(self.service.get_cpu_percent('test'), 4.0)
 
 # --- Network Service Tests ---
 class TestTcpNetworkService(unittest.TestCase):
