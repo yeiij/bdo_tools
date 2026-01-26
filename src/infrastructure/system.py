@@ -10,6 +10,9 @@ from domain.services import IProcessService
 
 
 class PsutilProcessService(IProcessService):
+    def __init__(self):
+        self._proc_cache = {}
+
     def get_pid(self, process_name: str) -> Optional[int]:
         for proc in psutil.process_iter(['name', 'pid']):
             try:
@@ -18,6 +21,7 @@ class PsutilProcessService(IProcessService):
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
         return None
+
 
     def get_status(self, process_name: str) -> ProcessStatus:
         pid = self.get_pid(process_name)
@@ -137,10 +141,22 @@ class PsutilProcessService(IProcessService):
         pid = self.get_pid(process_name)
         if not pid:
             return 0.0
+        
         try:
+            # Use cached process to allow cpu_percent to calculate delta from last call
+            proc = self._proc_cache.get(pid)
+            if not proc:
+                proc = psutil.Process(pid)
+                self._proc_cache[pid] = proc
+                # First call always returns 0.0, so we might return 0.0 initially
+            
             # interval=None calculates since last call (non-blocking)
-            return psutil.Process(pid).cpu_percent(interval=None) or 0.0
+            val = proc.cpu_percent(interval=None)
+            return val or 0.0
         except (psutil.NoSuchProcess, psutil.AccessDenied):
+            # Process died, remove from cache
+            if pid in self._proc_cache:
+                del self._proc_cache[pid]
             return 0.0
 
     def get_cpu_count(self) -> int:
