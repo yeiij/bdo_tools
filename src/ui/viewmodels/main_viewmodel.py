@@ -29,9 +29,14 @@ class MainViewModel:
         self.target_affinity: Optional[List[int]] = settings.target_affinity
         self.affinity: List[int] = []
         self.pid: Optional[int] = None
-        self.memory_usage_str: str = "-"
-        self.vram_usage_bytes: float = 0.0
         self.cpu_usage_str: str = "0%"
+        self.gpu_usage_str: str = "0%"
+        self.ram_used_str: str = "0GB"
+        self.ram_total_label: str = "/0GB RAM"
+        self.vram_used_str: str = "0GB"
+        self.vram_total_label: str = "/0GB vRAM"
+        self._cpu_temp_str: str = "N/A"
+        self._gpu_temp_str: str = "N/A"
         
         self._refresh_count = 0
         
@@ -45,31 +50,58 @@ class MainViewModel:
         self._calculate_metrics()
 
     @property
-    def vram_usage_str(self) -> str:
+    def vram_display_str(self) -> str:
         if not self._gpu_service.is_available():
-            # Hide completely if not available or return special string
             return "N/A"
-        return f"{self.vram_usage_bytes / (1024**3):.1f} GB"
+        return self.vram_used_str
+
+    @property
+    def cpu_temp_str(self) -> str:
+        return self._cpu_temp_str
+
+    @property
+    def gpu_temp_str(self) -> str:
+        return self._gpu_temp_str
 
     def _update_process_state(self):
-        """Update process status, PID, priority, affinity, and CPU count."""
+        """Update process status and System Resources."""
+        # Process State
         self.status = self._process_service.get_status(self.settings.process_name)
         self.pid = self._process_service.get_pid(self.settings.process_name)
         self.priority = self._process_service.get_priority(self.settings.process_name)
         self.affinity = self._process_service.get_affinity(self.settings.process_name)
         self.cpu_count = self._process_service.get_cpu_count()
         
-        mem_bytes = self._process_service.get_memory_usage(self.settings.process_name)
-        cpu_pct = self._process_service.get_cpu_percent(self.settings.process_name)
+        # System Memory
+        mem_used, mem_total = self._process_service.get_system_memory()
+        self.ram_used_str = f"{mem_used / (1024**3):.0f}GB"
+        self.ram_total_label = f"/{mem_total / (1024**3):.0f}GB RAM"
         
-        # VRAM
-        if self.pid:
-            self.vram_usage_bytes = self._gpu_service.get_vram_usage(self.pid)
+        # System CPU
+        self.cpu_usage_str = f"{self._process_service.get_system_cpu():.0f}%"
+        
+        # System VRAM
+        if self._gpu_service.is_available():
+            v_used, v_total = self._gpu_service.get_system_vram_usage()
+            self.vram_used_str = f"{v_used / (1024**3):.0f}GB"
+            self.vram_total_label = f"/{v_total / (1024**3):.0f}GB vRAM"
+            
+            # GPU Temp
+            g_temp = self._gpu_service.get_system_gpu_temperature()
+            self._gpu_temp_str = f"{g_temp:.0f}°C" if g_temp is not None else "N/A"
+            
+            # GPU Usage
+            g_usage = self._gpu_service.get_system_gpu_usage()
+            self.gpu_usage_str = f"{g_usage:.0f}%" if g_usage is not None else "0%"
         else:
-            self.vram_usage_bytes = 0.0
-        
-        self.memory_usage_str = f"{mem_bytes / (1024**3):.1f} GB" if mem_bytes else "-"
-        self.cpu_usage_str = f"{cpu_pct:.1f}%" if cpu_pct is not None else "0%"
+            self.vram_used_str = "0GB"
+            self.vram_total_label = "/0GB vRAM"
+            self._gpu_temp_str = "N/A"
+            self.gpu_usage_str = "0%"
+
+        # CPU Temp
+        c_temp = self._process_service.get_system_cpu_temperature()
+        self._cpu_temp_str = f"{c_temp:.0f}°C" if c_temp is not None else "N/A"
 
     def _update_network_state(self):
         """Update network connections with throttling."""

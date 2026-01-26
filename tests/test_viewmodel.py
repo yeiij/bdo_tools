@@ -14,6 +14,19 @@ class TestMainViewModel(unittest.TestCase):
         self.mock_process.is_admin.return_value = True
         self.mock_process.get_memory_usage.return_value = 0
         self.mock_process.get_cpu_percent.return_value = 0.0
+        self.mock_process.get_system_memory.return_value = (8*1024**3, 16*1024**3)
+        self.mock_process.get_system_cpu.return_value = 25.0
+        self.mock_process.get_system_cpu_temperature.return_value = 45.0
+        
+        # Patch GPU Service
+        patcher = patch('ui.viewmodels.main_viewmodel.NvidiaGpuService')
+        self.MockGpuService = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.mock_gpu = self.MockGpuService.return_value
+        self.mock_gpu.is_available.return_value = True
+        self.mock_gpu.get_system_vram_usage.return_value = (4*1024**3, 8*1024**3)
+        self.mock_gpu.get_system_gpu_temperature.return_value = 55.0
+        self.mock_gpu.get_system_gpu_usage.return_value = 50.0
         
         self.vm = MainViewModel(self.mock_process, self.mock_network, self.settings)
 
@@ -51,8 +64,10 @@ class TestMainViewModel(unittest.TestCase):
         self.assertEqual(self.vm.pid, 1234)
         self.assertEqual(self.vm.game_latency, 50.0)
         self.assertEqual(len(self.vm.connections), 1)
-        self.assertEqual(self.vm.memory_usage_str, "1.0 GB")
-        self.assertEqual(self.vm.cpu_usage_str, "12.5%")
+        self.assertEqual(self.vm.ram_used_str, "8GB")
+        self.assertEqual(self.vm.cpu_usage_str, "25%")
+        self.assertEqual(self.vm.vram_display_str, "4GB")
+        self.assertEqual(self.vm.gpu_usage_str, "50%")
 
     def test_refresh_not_running(self):
         self.mock_process.get_status.return_value = ProcessStatus.NOT_RUNNING
@@ -145,9 +160,29 @@ class TestMainViewModel(unittest.TestCase):
         result = self.vm.set_affinity([0])
         self.assertFalse(result)
 
-    def test_set_affinity_fail(self):
-        self.vm.pid = 123
-        self.mock_process.set_affinity.return_value = False
-        result = self.vm.set_affinity([0])
-        self.assertFalse(result)
+    def test_viewmodel_properties(self):
+        # Line 54, 59, 63 coverage
+        with patch('ui.viewmodels.main_viewmodel.NvidiaGpuService') as MockGpu:
+            MockGpu.return_value.is_available.return_value = True
+            
+            vm = MainViewModel(self.mock_process, self.mock_network, self.settings)
+            vm.vram_used_str = "4GB"
+            vm._cpu_temp_str = "45°C"
+            vm._gpu_temp_str = "50°C"
+            
+            self.assertEqual(vm.vram_display_str, "4GB")
+            self.assertEqual(vm.cpu_temp_str, "45°C")
+            self.assertEqual(vm.gpu_temp_str, "50°C")
+            
+            # Line 92-94 (GPU unavailable during refresh)
+            MockGpu.return_value.is_available.return_value = False
+            self.assertEqual(vm.vram_display_str, "N/A")
+
+    def test_refresh_gpu_unavailable(self):
+        # Explicit test for lines 92-94
+        self.mock_gpu.is_available.return_value = False
+        self.vm.refresh()
+        self.assertEqual(self.vm.vram_used_str, "0GB")
+        self.assertEqual(self.vm.vram_total_label, "/0GB vRAM")
+        self.assertEqual(self.vm.gpu_usage_str, "0%")
 

@@ -165,3 +165,47 @@ class PsutilProcessService(IProcessService):
 
     def get_cpu_count(self) -> int:
         return psutil.cpu_count(logical=True) or 1
+
+    def get_system_memory(self) -> tuple[float, float]:
+        """Returns (used_bytes, total_bytes) for the system."""
+        mem = psutil.virtual_memory()
+        return mem.used, mem.total
+
+    def get_system_cpu(self) -> float:
+        """Returns system-wide CPU usage percentage."""
+        return psutil.cpu_percent(interval=None)
+
+    def get_system_cpu_temperature(self) -> Optional[float]:
+        """Returns CPU temperature in Celsius (Windows fallback via PowerShell/WMI)."""
+        import subprocess
+        import os
+
+        # 1. Try PowerShell (Modern Windows)
+        try:
+            cmd = 'powershell -Command "Get-CimInstance -Namespace root\\wmi -ClassName MSAcpi_ThermalZoneTemperature | Select-Object -ExpandProperty CurrentTemperature"'
+            
+            startupinfo = None
+            if os.name == 'nt':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW # Hide window
+
+            output = subprocess.check_output(cmd, startupinfo=startupinfo, text=True, stderr=subprocess.DEVNULL)
+            if output.strip():
+                # CurrentTemperature is in Kelvin * 10
+                temp_k10 = float(output.strip())
+                return (temp_k10 / 10.0) - 273.15
+        except Exception:
+            pass
+
+        # 2. Try WMIC (Legacy Windows)
+        try:
+            cmd = 'wmic /namespace:\\\\root\\wmi PATH MSAcpi_ThermalZoneTemperature get CurrentTemperature'
+            output = subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.DEVNULL)
+            lines = output.strip().splitlines()
+            if len(lines) > 1:
+                temp_k10 = float(lines[1].strip())
+                return (temp_k10 / 10.0) - 273.15
+        except Exception:
+            pass
+
+        return None

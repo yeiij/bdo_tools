@@ -16,7 +16,7 @@ install:
 
 # Run the application
 run:
-	uv run python -m src.main
+	uv run python main.py
 
 build:
 	uv run python build_exe.py

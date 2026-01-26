@@ -8,7 +8,7 @@ from typing import List, Optional
 
 from domain.models import ConnectionInfo
 from domain.services import INetworkService
-from .services_map import resolve_service_name
+from infrastructure.services_map import resolve_service_name
 
 
 def tcp_ping(host: str, port: int, count: int = 1, timeout: float = 1.0) -> Optional[float]:

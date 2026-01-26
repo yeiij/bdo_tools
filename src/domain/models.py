@@ -28,7 +28,7 @@ class ConnectionInfo:
 @dataclass
 class AppSettings:
     process_name: str = "BlackDesert64.exe"
-    poll_interval_ms: int = 5000
+    poll_interval_ms: int = 4000
     theme: str = "dark"
     target_priority: Optional[str] = None
     target_affinity: Optional[List[int]] = None

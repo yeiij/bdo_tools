@@ -9,7 +9,8 @@ if __name__ == '__main__':
     if os.path.exists('build'): shutil.rmtree('build')
 
     PyInstaller.__main__.run([
-        'src/main.py',
+        'main.py',
+        '--paths=src',
         '--name=BDO Monitor',
         '--onefile',
         '--windowed',

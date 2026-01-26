@@ -26,7 +26,8 @@ def resource_path(relative_path):
 def start_app(viewModel: MainViewModel):
     root = tk.Tk()
     root.title("BDO Monitor")
-    root.geometry("600x340")
+    # Geometry removed to allow auto-sizing
+    root.resizable(False, False)
     
     # Set Icon
     try:
@@ -50,7 +51,10 @@ class UIConstants:
     FG_ERROR = "#ff4c4c"
     FG_SUCCESS = "#00ff00"
     FG_ACCENT = "#4cc2ff"
-    FONT_HEADER = ("Segoe UI", 24, "bold")
+    FONT_HEADER = ("Segoe UI", 10, "bold")
+    FONT_METRIC_VALUE = ("Segoe UI", 24, "bold")
+    FONT_PING_VALUE = ("Segoe UI", 32, "bold")
+    FONT_METRIC_LABEL = ("Segoe UI", 12, "bold")
     FONT_NORMAL = ("Segoe UI", 9)
     FONT_BOLD = ("Segoe UI", 9, "bold")
     FONT_SMALL = ("Segoe UI", 8)
@@ -65,7 +69,7 @@ class MainWindow(ttk.Frame):
         self.vm = viewModel
         
         self.setup_ui()
-        self.pack(fill=tk.BOTH, expand=True)
+        self.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         # Tray Icon Setup
         self.tray_icon = None
@@ -123,8 +127,10 @@ class MainWindow(ttk.Frame):
 
     def setup_ui(self):
         self._setup_styles()
-        self._setup_header()
-        self._setup_network_table()
+        # Top Compact Info Bar
+        self._setup_top_info_bar()
+        # Main Grid Metrics
+        self._setup_metrics_grid()
         self._setup_footer()
 
     def _setup_styles(self):
@@ -150,70 +156,18 @@ class MainWindow(ttk.Frame):
             selectbackground=[("readonly", UIConstants.BG_COLOR)]
         )
 
-    def _setup_header(self):
-        # Header Container
-        self.header_frame = ttk.Frame(self, padding=15)
-        self.header_frame.pack(side=tk.TOP, fill=tk.X)
+    def _setup_top_info_bar(self):
+        self.info_bar = ttk.Frame(self, padding=(10, 5), relief="flat")
+        self.info_bar.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
         
-        # Top Row (Ping & Admin)
-        self._setup_top_row()
-        
-        # Bottom Row (Process Details)
-        self._setup_details_row()
-
-    def _setup_top_row(self):
-        top_row = ttk.Frame(self.header_frame)
-        top_row.pack(fill=tk.X)
-        
-        self.ping_label = ttk.Label(
-            top_row, 
-            text="Ping: -- ms", 
-            font=UIConstants.FONT_HEADER,
-            foreground=UIConstants.FG_WHITE
-        )
-        self.ping_label.pack(side=tk.LEFT)
-        
-        # Divider
-        ttk.Label(top_row, text=" | ", font=UIConstants.FONT_HEADER, foreground=UIConstants.FG_GREY).pack(side=tk.LEFT, padx=10)
-        
-        # RAM
-        self.ram_label = ttk.Label(top_row, text="RAM: -", font=UIConstants.FONT_HEADER, foreground=UIConstants.FG_WHITE)
-        self.ram_label.pack(side=tk.LEFT)
-
-        # Divider
-        ttk.Label(top_row, text=" | ", font=UIConstants.FONT_HEADER, foreground=UIConstants.FG_GREY).pack(side=tk.LEFT, padx=10)
-
-        # VRAM
-        self.vram_label = ttk.Label(top_row, text="VRAM: -", font=UIConstants.FONT_HEADER, foreground=UIConstants.FG_WHITE)
-        self.vram_label.pack(side=tk.LEFT)
-
-        # Divider
-        ttk.Label(top_row, text=" | ", font=UIConstants.FONT_HEADER, foreground=UIConstants.FG_GREY).pack(side=tk.LEFT, padx=10)
-
-        # CPU
-        self.cpu_label = ttk.Label(top_row, text="Proc: -", font=UIConstants.FONT_HEADER, foreground=UIConstants.FG_WHITE)
-        self.cpu_label.pack(side=tk.LEFT)
-
-    def _setup_details_row(self):
-        details_frame = ttk.Frame(self.header_frame)
-        details_frame.pack(anchor="w", pady=(5, 0))
-        
-        # Process Info
-        self.proc_label = ttk.Label(
-            details_frame,
-            text="Initializing...",
-            font=UIConstants.FONT_NORMAL,
-            foreground=UIConstants.FG_GREY
-        )
-        self.proc_label.pack(side=tk.LEFT)
-        
-        # Divider
-        self._add_divider(details_frame)
+        # Details inside a single frame
+        details_inner = ttk.Frame(self.info_bar)
+        details_inner.pack(fill=tk.X)
 
         # Priority
-        ttk.Label(details_frame, text="Priority: ", foreground=UIConstants.FG_GREY).pack(side=tk.LEFT)
+        ttk.Label(details_inner, text="Priority: ", foreground=UIConstants.FG_GREY).pack(side=tk.LEFT)
         self.priority_combo = ttk.Combobox(
-            details_frame, 
+            details_inner, 
             values=["Idle", "Below Normal", "Normal", "Above Normal", "High", "Realtime"],
             state="readonly",
             width=11
@@ -221,13 +175,12 @@ class MainWindow(ttk.Frame):
         self.priority_combo.pack(side=tk.LEFT)
         self.priority_combo.bind("<<ComboboxSelected>>", self.on_priority_change)
 
-        # Divider
-        self._add_divider(details_frame)
+        self._add_divider(details_inner)
 
         # Affinity
-        ttk.Label(details_frame, text="Affinity: ", foreground=UIConstants.FG_GREY).pack(side=tk.LEFT)
+        ttk.Label(details_inner, text="Affinity: ", foreground=UIConstants.FG_GREY).pack(side=tk.LEFT)
         self.affinity_val_label = ttk.Label(
-            details_frame, 
+            details_inner, 
             text="...", 
             font=UIConstants.FONT_BOLD, 
             foreground=UIConstants.FG_WHITE
@@ -236,35 +189,71 @@ class MainWindow(ttk.Frame):
         
         # Affinity Edit Button
         ttk.Button(
-            details_frame,
+            details_inner,
             text="⚙️",
             width=3,
             command=self.open_affinity_dialog
         ).pack(side=tk.LEFT, padx=(5, 0))
 
-    def _add_divider(self, parent):
-        ttk.Label(parent, text=" | ", foreground="#666666").pack(side=tk.LEFT)
+    def _setup_metrics_grid(self):
+        grid_container = ttk.Frame(self, padding=(20, 5)) 
+        grid_container.pack(fill=tk.BOTH, expand=True)
 
-    def _setup_network_table(self):
-        self.tree_frame = ttk.Frame(self, padding=10)
-        self.tree_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        # Layout 3x3 (approx)
+        # Row 0: Ping
+        # Row 1: GPU, vRAM, GPU Temp
+        # Row 2: CPU, RAM, CPU Temp
+
+        # Row 0
+        self.ping_frame = self._create_metric_cell(grid_container, "Ping", "0", row=0, col=0, val_font=UIConstants.FONT_PING_VALUE)
+        self.ping_val_label = self.ping_frame.val_label
         
-        columns = ("ip", "port", "service", "latency")
-        self.tree = ttk.Treeview(self.tree_frame, columns=columns, show="headings")
+        # Row 1
+        self.gpu_frame = self._create_metric_cell(grid_container, "GPU", "0%", row=1, col=0)
+        self.gpu_val_label = self.gpu_frame.val_label
         
-        self.tree.heading("ip", text="Remote IP")
-        self.tree.heading("port", text="Port")
-        self.tree.heading("service", text="Service")
-        self.tree.heading("latency", text="Latency")
+        self.vram_frame = self._create_metric_cell(grid_container, "/0GB vRAM", "0GB", row=1, col=1)
+        self.vram_val_label = self.vram_frame.val_label
+        self.vram_label = self.vram_frame.tit_label
+
+        self.gpu_temp_frame = self._create_metric_cell(grid_container, "GPU Temp", "N/A", row=1, col=2)
+        self.gpu_temp_val_label = self.gpu_temp_frame.val_label
+
+        # Row 2
+        # Renamed Proc -> CPU as requested
+        self.cpu_frame = self._create_metric_cell(grid_container, "CPU", "0%", row=2, col=0)
+        self.cpu_val_label = self.cpu_frame.val_label
+
+        self.ram_frame = self._create_metric_cell(grid_container, "/0GB RAM", "0GB", row=2, col=1)
+        self.ram_val_label = self.ram_frame.val_label
+        self.ram_label = self.ram_frame.tit_label
+
+        self.cpu_temp_frame = self._create_metric_cell(grid_container, "CPU Temp", "N/A", row=2, col=2)
+        self.cpu_temp_val_label = self.cpu_temp_frame.val_label
+
+        for i in range(3): grid_container.columnconfigure(i, weight=1)
+        for i in range(3): grid_container.rowconfigure(i, weight=1)
+
+    def _create_metric_cell(self, parent, label_text, initial_val, row, col, val_font=None):
+        frame = ttk.Frame(parent)
+        frame.grid(row=row, column=col, sticky="w", padx=10, pady=5)
         
-        self.tree.column("ip", width=150)
-        self.tree.column("port", width=80)
-        self.tree.column("service", width=150)
-        self.tree.column("latency", width=80)
+        if val_font is None:
+            val_font = UIConstants.FONT_METRIC_VALUE
+
+        # Stacked: Label on top, Value below
+        lbl = ttk.Label(frame, text=label_text, font=UIConstants.FONT_BOLD, foreground=UIConstants.FG_GREY)
+        lbl.pack(side=tk.TOP, anchor="w")
         
-        self.tree.pack(fill=tk.BOTH, expand=True)
-        # Configure tag for highlighting
-        self.tree.tag_configure("gamerow", foreground=UIConstants.FG_ACCENT)
+        val_lbl = ttk.Label(frame, text=initial_val, font=val_font, foreground=UIConstants.FG_WHITE)
+        val_lbl.pack(side=tk.TOP, anchor="w")
+        
+        frame.tit_label = lbl
+        frame.val_label = val_lbl
+        return frame
+
+    def _add_divider(self, parent):
+        ttk.Label(parent, text=" | ", foreground="#666666").pack(side=tk.LEFT, padx=5)
 
     def _setup_footer(self):
         ttk.Label(
@@ -383,6 +372,7 @@ class MainWindow(ttk.Frame):
 
     def on_priority_change(self, event):
         val = self.priority_combo.get()
+        print(f"DEBUG: on_priority_change val={val} vm={self.vm}")
         if val:
             self.vm.set_manual_priority(val)
         self.root.focus()
@@ -394,14 +384,19 @@ class MainWindow(ttk.Frame):
 
     def update_view(self):
         # Update Ping
-        ping_text = f"Ping: {self.vm.game_latency:.0f} ms" if self.vm.game_latency is not None else "Ping: -- ms"
-        self.ping_label.config(text=ping_text)
+        ping_val = f"{self.vm.game_latency:.0f}" if self.vm.game_latency is not None else "--"
+        self.ping_val_label.config(text=ping_val)
 
-        # Update Info
-        status_str = "Running" if self.vm.status == ProcessStatus.RUNNING else "Not Running"
-        pid_str = f"PID: {self.vm.pid}" if self.vm.pid else "PID: -"
-        self.proc_label.config(text=f"{self.vm.settings.process_name} ({pid_str}) | {status_str}")
+        # Update Title with Process Info
+        base_title = "BDO Monitor"
+        if self.vm.pid:
+            base_title += f" - {self.vm.settings.process_name} ({self.vm.pid})"
         
+        if not self.vm.is_admin:
+             self.root.title(f"{base_title} - Admin Required (Limited Controls)")
+        else:
+             self.root.title(base_title)
+             
         # Update Priority
         if self.vm.priority != self.priority_combo.get():
              self.priority_combo.set(self.vm.priority)
@@ -410,40 +405,24 @@ class MainWindow(ttk.Frame):
         self.priority_combo.configure(style="Success.TCombobox" if is_high else "TCombobox")
         self.priority_combo['foreground'] = UIConstants.FG_SUCCESS if is_high else UIConstants.FG_WHITE
         
-        # Update Stats
-        self.ram_label.config(text=f"RAM: {self.vm.memory_usage_str}")
-        self.vram_label.config(text=f"VRAM: {self.vm.vram_usage_str}")
-        self.cpu_label.config(text=f"Proc: {self.vm.cpu_usage_str}")
+        # Update Stats (Clean format from ViewModel)
+        self.ram_val_label.config(text=self.vm.ram_used_str)
+        self.ram_label.config(text=self.vm.ram_total_label)
+        
+        self.gpu_val_label.config(text=self.vm.gpu_usage_str)
+
+        self.vram_val_label.config(text=self.vm.vram_display_str)
+        self.vram_label.config(text=self.vm.vram_total_label)
+        
+        self.cpu_val_label.config(text=self.vm.cpu_usage_str)
+        
+        # Update Temps
+        self.cpu_temp_val_label.config(text=self.vm.cpu_temp_str)
+        self.gpu_temp_val_label.config(text=self.vm.gpu_temp_str)
              
-        # Update Affinity
         aff_len = len(self.vm.affinity) if self.vm.affinity else 0
         self.affinity_val_label.config(text=f"{aff_len} cores")
         
-        # Check optimization (No 0/1)
         is_optimized = bool(self.vm.affinity) and (0 not in self.vm.affinity) and (1 not in self.vm.affinity)
         self.affinity_val_label.config(foreground=UIConstants.FG_SUCCESS if is_optimized else UIConstants.FG_WHITE)
 
-        # Update Admin Status in Title
-        base_title = "BDO Monitor"
-        if not self.vm.is_admin:
-             self.root.title(f"{base_title} - Admin Required (Limited Controls)")
-        else:
-             self.root.title(base_title)
-
-        # Update Table
-        self._update_table()
-
-    def _update_table(self):
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-            
-        for conn in self.vm.connections:
-            latency = f"{conn.latency_ms:.0f} ms" if conn.latency_ms else "N/A"
-            tags = ("gamerow",) if "Game Server" in conn.service_name else ()
-            
-            self.tree.insert("", tk.END, values=(
-                conn.remote_ip,
-                str(conn.remote_port),
-                conn.service_name,
-                latency
-            ), tags=tags)
