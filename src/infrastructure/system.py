@@ -118,5 +118,30 @@ class PsutilProcessService(IProcessService):
         except Exception:
             return False
 
+    def get_memory_usage(self, process_name: str) -> float:
+        pid = self.get_pid(process_name)
+        if not pid:
+            return 0.0
+        try:
+            p = psutil.Process(pid)
+            # Try to get Unique Set Size (USS) which matches Task Manager "Private working set"
+            # This is more accurate than RSS (includes shared) or Private (Commit Size)
+            try:
+                return p.memory_full_info().uss
+            except (psutil.AccessDenied, AttributeError):
+                return p.memory_info().rss
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            return 0.0
+
+    def get_cpu_percent(self, process_name: str) -> float:
+        pid = self.get_pid(process_name)
+        if not pid:
+            return 0.0
+        try:
+            # interval=None calculates since last call (non-blocking)
+            return psutil.Process(pid).cpu_percent(interval=None) or 0.0
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            return 0.0
+
     def get_cpu_count(self) -> int:
         return psutil.cpu_count(logical=True) or 1

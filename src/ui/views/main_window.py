@@ -173,14 +173,19 @@ class MainWindow(ttk.Frame):
         )
         self.ping_label.pack(side=tk.LEFT)
         
-        self.admin_label = ttk.Label(
-            top_row,
-            text="Admin Required (Limited Controls)",
-            font=UIConstants.FONT_SMALL,
-            foreground=UIConstants.FG_ERROR
-        )
-        if not self.vm.is_admin:
-            self.admin_label.pack(side=tk.RIGHT, anchor="e")
+        # Divider
+        ttk.Label(top_row, text=" | ", font=UIConstants.FONT_HEADER, foreground=UIConstants.FG_GREY).pack(side=tk.LEFT, padx=10)
+        
+        # RAM
+        self.ram_label = ttk.Label(top_row, text="RAM: -", font=UIConstants.FONT_HEADER, foreground=UIConstants.FG_WHITE)
+        self.ram_label.pack(side=tk.LEFT)
+
+        # Divider
+        ttk.Label(top_row, text=" | ", font=UIConstants.FONT_HEADER, foreground=UIConstants.FG_GREY).pack(side=tk.LEFT, padx=10)
+
+        # CPU
+        self.cpu_label = ttk.Label(top_row, text="Proc: -", font=UIConstants.FONT_HEADER, foreground=UIConstants.FG_WHITE)
+        self.cpu_label.pack(side=tk.LEFT)
 
     def _setup_details_row(self):
         details_frame = ttk.Frame(self.header_frame)
@@ -397,6 +402,10 @@ class MainWindow(ttk.Frame):
         is_high = self.vm.priority in ["Above Normal", "High", "Realtime"]
         self.priority_combo.configure(style="Success.TCombobox" if is_high else "TCombobox")
         self.priority_combo['foreground'] = UIConstants.FG_SUCCESS if is_high else UIConstants.FG_WHITE
+        
+        # Update Stats
+        self.ram_label.config(text=f"RAM: {self.vm.memory_usage_str}")
+        self.cpu_label.config(text=f"Proc: {self.vm.cpu_usage_str}")
              
         # Update Affinity
         aff_len = len(self.vm.affinity) if self.vm.affinity else 0
@@ -406,11 +415,12 @@ class MainWindow(ttk.Frame):
         is_optimized = bool(self.vm.affinity) and (0 not in self.vm.affinity) and (1 not in self.vm.affinity)
         self.affinity_val_label.config(foreground=UIConstants.FG_SUCCESS if is_optimized else UIConstants.FG_WHITE)
 
-        # Update Admin Label
-        if self.vm.is_admin:
-            self.admin_label.pack_forget()
+        # Update Admin Status in Title
+        base_title = "BDO Monitor"
+        if not self.vm.is_admin:
+             self.root.title(f"{base_title} - Admin Required (Limited Controls)")
         else:
-            self.admin_label.pack(side=tk.RIGHT, anchor="e")
+             self.root.title(base_title)
 
         # Update Table
         self._update_table()

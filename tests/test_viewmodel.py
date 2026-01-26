@@ -12,6 +12,8 @@ class TestMainViewModel(unittest.TestCase):
         
         # Setup default mock behavior
         self.mock_process.is_admin.return_value = True
+        self.mock_process.get_memory_usage.return_value = 0
+        self.mock_process.get_cpu_percent.return_value = 0.0
         
         self.vm = MainViewModel(self.mock_process, self.mock_network, self.settings)
 
@@ -25,6 +27,8 @@ class TestMainViewModel(unittest.TestCase):
         self.mock_process.get_pid.return_value = 1234
         self.mock_process.get_priority.return_value = "Normal"
         self.mock_process.get_affinity.return_value = [0, 1, 2, 3]
+        self.mock_process.get_memory_usage.return_value = 1073741824 # 1 GB
+        self.mock_process.get_cpu_percent.return_value = 12.5
         
         conn = ConnectionInfo(
             pid=1234,
@@ -47,6 +51,8 @@ class TestMainViewModel(unittest.TestCase):
         self.assertEqual(self.vm.pid, 1234)
         self.assertEqual(self.vm.game_latency, 50.0)
         self.assertEqual(len(self.vm.connections), 1)
+        self.assertEqual(self.vm.memory_usage_str, "1.0 GB")
+        self.assertEqual(self.vm.cpu_usage_str, "12.5%")
 
     def test_refresh_not_running(self):
         self.mock_process.get_status.return_value = ProcessStatus.NOT_RUNNING

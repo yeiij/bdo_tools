@@ -281,6 +281,30 @@ class TestPsutilProcessService(unittest.TestCase):
         with patch.object(self.service, 'get_pid', return_value=123):
             self.assertFalse(self.service.set_affinity('foo', [1]))
 
+    @patch('psutil.Process')
+    def test_get_memory_usage_success(self, mock_cls):
+        p = MagicMock()
+        mock_cls.return_value = p
+        
+        with patch.object(self.service, 'get_pid', return_value=123):
+             # Scenario 1: USS available (Task Manager 'Private Working Set')
+             p.memory_full_info.return_value.uss = 3000
+             self.assertEqual(self.service.get_memory_usage('test'), 3000)
+
+             # Scenario 2: USS AccessDenied -> Fallback to RSS
+             p.memory_full_info.side_effect = psutil.AccessDenied(0)
+             p.memory_info.return_value.rss = 2000
+             self.assertEqual(self.service.get_memory_usage('test'), 2000)
+
+    @patch('psutil.Process')
+    def test_get_cpu_percent_success(self, mock_cls):
+        p = MagicMock()
+        p.cpu_percent.return_value = 15.5
+        mock_cls.return_value = p
+        
+        with patch.object(self.service, 'get_pid', return_value=123):
+             self.assertEqual(self.service.get_cpu_percent('test'), 15.5)
+
 # --- Network Service Tests ---
 class TestTcpNetworkService(unittest.TestCase):
     def setUp(self):
