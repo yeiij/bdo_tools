@@ -1,6 +1,9 @@
+"""Main entry point."""
+
 from domain.models import AppSettings
-from infrastructure.system import PsutilProcessService
+from infrastructure.gpu import NvidiaGpuService
 from infrastructure.network import TcpNetworkService
+from infrastructure.system import PsutilProcessService, PsutilSystemService
 from ui.viewmodels.main_viewmodel import MainViewModel
 from ui.views.main_window import start_app
 
@@ -8,16 +11,28 @@ from ui.views.main_window import start_app
 def main():
     # 1. Configuration
     settings = AppSettings.load()
-    
+    settings.save()  # Ensure file is created/updated immediately
+
     # 2. Infrastructure Services
     process_service = PsutilProcessService()
+    system_service = PsutilSystemService()
     network_service = TcpNetworkService()
-    
+    gpu_service = NvidiaGpuService()
+
     # 3. ViewModels
-    vm = MainViewModel(process_service, network_service, settings)
-    
+    vm = MainViewModel(
+        process_service=process_service,
+        network_service=network_service,
+        system_service=system_service,
+        gpu_service=gpu_service,
+        settings=settings,
+    )
+
     # 4. Start UI
-    start_app(vm)
+    try:
+        start_app(vm)
+    finally:
+        gpu_service.shutdown()
 
 
 if __name__ == "__main__":

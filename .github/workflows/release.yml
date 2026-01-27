@@ -26,15 +26,33 @@ jobs:
       - name: Install dependencies
         run: make install
 
+      - name: Run Tests (Pre-release validation)
+        run: make test
+
+      - name: Run Linting
+        run: make lint
+
       - name: Build Executable
         run: make build
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/BDO Monitor.exe
-          generate_release_notes: false
+          files: dist/GameMonitor.exe
+          generate_release_notes: true
           draft: false
           prerelease: false
+          body: |
+            ## GameMonitor ${{ github.ref_name }}
+            
+            ### Download
+            - **GameMonitor.exe** - Standalone Windows executable
+            
+            ### Installation
+            1. Download `GameMonitor.exe`
+            2. Run as Administrator for optimization features
+            
+            ### What's Changed
+            See full changelog below.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

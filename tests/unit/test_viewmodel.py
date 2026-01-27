@@ -1,34 +1,43 @@
 
 import unittest
 from unittest.mock import MagicMock, patch
-from ui.viewmodels.main_viewmodel import MainViewModel
+
 from domain.models import AppSettings, ConnectionInfo, ProcessStatus
+from ui.viewmodels.main_viewmodel import MainViewModel
+
 
 class TestMainViewModel(unittest.TestCase):
     def setUp(self):
         self.mock_process = MagicMock()
         self.mock_network = MagicMock()
-        self.settings = AppSettings("Test.exe", [])
+        self.mock_system = MagicMock()
+        self.mock_gpu = MagicMock()
+        self.settings = AppSettings(game_process_name="Test.exe", game_target_affinity=[])
         
-        # Setup default mock behavior
+        # Setup process service mock behavior
         self.mock_process.is_admin.return_value = True
         self.mock_process.get_memory_usage.return_value = 0
         self.mock_process.get_cpu_percent.return_value = 0.0
-        self.mock_process.get_system_memory.return_value = (8*1024**3, 16*1024**3)
-        self.mock_process.get_system_cpu.return_value = 25.0
-        self.mock_process.get_system_cpu_temperature.return_value = 45.0
         
-        # Patch GPU Service
-        patcher = patch('ui.viewmodels.main_viewmodel.NvidiaGpuService')
-        self.MockGpuService = patcher.start()
-        self.addCleanup(patcher.stop)
-        self.mock_gpu = self.MockGpuService.return_value
+        # Setup system service mock behavior
+        self.mock_system.get_cpu_count.return_value = 16
+        self.mock_system.get_system_memory.return_value = (8*1024**3, 16*1024**3)
+        self.mock_system.get_system_cpu.return_value = 25.0
+        self.mock_system.get_system_cpu_temperature.return_value = 45.0
+        
+        # Setup GPU service mock behavior
         self.mock_gpu.is_available.return_value = True
         self.mock_gpu.get_system_vram_usage.return_value = (4*1024**3, 8*1024**3)
         self.mock_gpu.get_system_gpu_temperature.return_value = 55.0
         self.mock_gpu.get_system_gpu_usage.return_value = 50.0
         
-        self.vm = MainViewModel(self.mock_process, self.mock_network, self.settings)
+        self.vm = MainViewModel(
+            self.mock_process,
+            self.mock_network,
+            self.mock_system,
+            self.mock_gpu,
+            self.settings
+        )
 
     def test_initial_state(self):
         self.assertEqual(self.vm.status, ProcessStatus.UNKNOWN)
@@ -97,12 +106,12 @@ class TestMainViewModel(unittest.TestCase):
         self.mock_process.get_pid.return_value = 123
         
         
-        # Case 1: Dynamic Port (Localhost + Random High Port)
-        conn1 = ConnectionInfo(123, "127.0.0.1", 50000, "127.0.0.1", 53600, "EST", "Unknown") # ExitLag
-        # Case 2: Standard Localhost (Web/Auth) -> Should remain IP
-        conn2 = ConnectionInfo(123, "127.0.0.1", 50000, "127.0.0.1", 443, "EST", "Web") # Not ExitLag
-        # Case 3: Legacy Fixed Port
-        conn3 = ConnectionInfo(123, "127.0.0.1", 50000, "10.0.0.5", 60774, "EST", "Old") # Legacy
+        # Case 1: Dynamic Port (Localhost + Random High Port) -> ExitLag
+        conn1 = ConnectionInfo(123, "127.0.0.1", 50000, "127.0.0.1", 53600, "EST", "Unknown")
+        # Case 2: Standard Localhost (Web/Auth on port 443) -> Should remain IP
+        conn2 = ConnectionInfo(123, "127.0.0.1", 50000, "127.0.0.1", 443, "EST", "Web")
+        # Case 3: NOT localhost, so no ExitLag annotation
+        conn3 = ConnectionInfo(123, "127.0.0.1", 50000, "10.0.0.5", 60774, "EST", "Old")
         
         self.mock_network.get_connections.return_value = [conn1, conn2, conn3]
         
@@ -110,14 +119,17 @@ class TestMainViewModel(unittest.TestCase):
         self.vm.refresh()
         self.vm.refresh()
         
+        # Conn1: localhost with high port -> ExitLag
         self.assertEqual(self.vm.connections[0].remote_ip, "ExitLag")
         self.assertEqual(self.vm.connections[0].service_name, "Game Server")
         
+        # Conn2: localhost but port 443 (not booster) -> keeps IP
         self.assertEqual(self.vm.connections[1].remote_ip, "127.0.0.1")
-        self.assertNotEqual(self.vm.connections[1].service_name, "Game Server")
+        self.assertEqual(self.vm.connections[1].service_name, "Web")
         
-        self.assertEqual(self.vm.connections[2].remote_ip, "ExitLag")
-        self.assertEqual(self.vm.connections[2].service_name, "Game Server")
+        # Conn3: NOT localhost -> no annotation, keeps original IP
+        self.assertEqual(self.vm.connections[2].remote_ip, "10.0.0.5")
+        self.assertEqual(self.vm.connections[2].service_name, "Old")
 
     def test_priority_watchdog(self):
         self.mock_process.get_status.return_value = ProcessStatus.RUNNING
@@ -126,7 +138,7 @@ class TestMainViewModel(unittest.TestCase):
         
         self.vm.refresh()
         
-        self.mock_process.set_priority.assert_called_with(self.settings.process_name, "High")
+        self.mock_process.set_priority.assert_called_with(self.settings.game_process_name, "High")
 
     def test_affinity_watchdog(self):
         self.mock_process.get_status.return_value = ProcessStatus.RUNNING
@@ -135,15 +147,15 @@ class TestMainViewModel(unittest.TestCase):
         
         self.vm.refresh()
         
-        self.mock_process.set_affinity.assert_called_with(self.settings.process_name, [0, 1])
+        self.mock_process.set_affinity.assert_called_with(self.settings.game_process_name, [0, 1])
 
     def test_set_manual_priority(self):
         with patch.object(self.settings, 'save') as mock_save:
             self.vm.set_manual_priority("High")
             self.assertEqual(self.vm.target_priority, "High")
-            self.assertEqual(self.settings.target_priority, "High")
+            self.assertEqual(self.settings.game_target_priority, "High")
             mock_save.assert_called_once()
-            self.mock_process.set_priority.assert_called_with(self.settings.process_name, "High")
+            self.mock_process.set_priority.assert_called_with(self.settings.game_process_name, "High")
 
     def test_set_affinity_success(self):
         self.vm.pid = 123
@@ -151,32 +163,33 @@ class TestMainViewModel(unittest.TestCase):
         with patch.object(self.settings, 'save') as mock_save:
             result = self.vm.set_affinity([2, 3])
             self.assertTrue(result)
-            self.assertEqual(self.settings.target_affinity, [2, 3])
+            self.assertEqual(self.settings.game_target_affinity, [2, 3])
             self.assertEqual(self.vm.target_affinity, [2, 3]) # Verify runtime update
             mock_save.assert_called_once()
 
     def test_set_affinity_no_pid(self):
-        self.vm.pid = None
+        # When process service returns False (e.g., no PID), set_affinity should return False
+        self.mock_process.set_affinity.return_value = False
         result = self.vm.set_affinity([0])
         self.assertFalse(result)
 
     def test_viewmodel_properties(self):
-        # Line 54, 59, 63 coverage
-        with patch('ui.viewmodels.main_viewmodel.NvidiaGpuService') as MockGpu:
-            MockGpu.return_value.is_available.return_value = True
-            
-            vm = MainViewModel(self.mock_process, self.mock_network, self.settings)
-            vm.vram_used_str = "4GB"
-            vm._cpu_temp_str = "45°C"
-            vm._gpu_temp_str = "50°C"
-            
-            self.assertEqual(vm.vram_display_str, "4GB")
-            self.assertEqual(vm.cpu_temp_str, "45°C")
-            self.assertEqual(vm.gpu_temp_str, "50°C")
-            
-            # Line 92-94 (GPU unavailable during refresh)
-            MockGpu.return_value.is_available.return_value = False
-            self.assertEqual(vm.vram_display_str, "N/A")
+        # Test vram_display_str property with GPU available
+        self.mock_gpu.is_available.return_value = True
+        self.vm.vram_used_str = "4GB"
+        self.assertEqual(self.vm.vram_display_str, "4GB")
+        
+        # Test vram_display_str property with GPU unavailable
+        self.mock_gpu.is_available.return_value = False
+        self.assertEqual(self.vm.vram_display_str, "N/A")
+        
+        # Reset and test temperature properties
+        self.mock_gpu.is_available.return_value = True
+        self.vm._cpu_temp_str = "45°C"
+        self.vm._gpu_temp_str = "50°C"
+        
+        self.assertEqual(self.vm.cpu_temp_str, "45°C")
+        self.assertEqual(self.vm.gpu_temp_str, "50°C")
 
     def test_refresh_gpu_unavailable(self):
         # Explicit test for lines 92-94
@@ -184,5 +197,54 @@ class TestMainViewModel(unittest.TestCase):
         self.vm.refresh()
         self.assertEqual(self.vm.vram_used_str, "0GB")
         self.assertEqual(self.vm.vram_total_label, "/0GB vRAM")
+        self.assertEqual(self.vm.vram_total_label, "/0GB vRAM")
         self.assertEqual(self.vm.gpu_usage_str, "0%")
 
+    def test_network_controls(self):
+        # Setup Network Running
+        self.vm.network_pid = 999 
+        
+        # Test Set Priority
+        with patch.object(self.settings, 'save') as mock_save:
+            self.vm.set_network_manual_priority("High")
+            
+            self.assertEqual(self.vm.network_target_priority, "High")
+            self.mock_process.set_priority.assert_called_with(self.settings.network_process_name, "High")
+            mock_save.assert_called()
+            
+        # Test Set Affinity
+        self.mock_process.set_affinity.return_value = True
+        with patch.object(self.settings, 'save') as mock_save:
+            self.vm.set_network_affinity([0, 1])
+            
+            self.assertEqual(self.vm.network_target_affinity, [0, 1])
+            self.mock_process.set_affinity.assert_called_with(self.settings.network_process_name, [0, 1])
+            mock_save.assert_called()
+            
+    def test_network_enforcement(self):
+        self.vm.status = ProcessStatus.RUNNING
+        self.vm.network_pid = 999
+        self.vm.network_priority = "Normal"
+        self.vm.network_target_priority = "High"
+        
+        # Trigger enforcement via the private method
+        self.vm._enforce_active_policies()
+        
+        self.mock_process.set_priority.assert_called_with(self.settings.network_process_name, "High")
+
+
+    def test_is_network_active_property(self):
+        # Line 198 coverage:  Test is_network_active property
+        from domain.models import ConnectionInfo
+        conn1 = ConnectionInfo(123, '127.0.0.1', 50000, 'ExitLag', 53600, 'EST', 'Game Server')
+        conn2 = ConnectionInfo(123, '127.0.0.1', 50001, '8.8.8.8', 443, 'EST', 'Web')
+        self.vm.connections = [conn1, conn2]
+        self.assertTrue(self.vm.is_network_active)
+        self.vm.connections = [conn2]
+        self.assertFalse(self.vm.is_network_active)
+
+    def test_set_network_affinity_failure(self):
+        # Line 227 coverage: Test set_network_affinity when set_affinity fails
+        self.mock_process.set_affinity.return_value = False
+        result = self.vm.set_network_affinity([0, 1])
+        self.assertFalse(result)
