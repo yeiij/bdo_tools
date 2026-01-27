@@ -1,6 +1,6 @@
 # GameMonitor
 
-![Version](https://img.shields.io/badge/version-1.0.3-blue)
+![Version](https://img.shields.io/badge/version-1.1.1-blue)
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue)
 ![Coverage](https://img.shields.io/badge/coverage-99.59%25-brightgreen)
 ![Tests](https://img.shields.io/badge/tests-88%20passed-brightgreen)
