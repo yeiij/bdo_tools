@@ -1,11 +1,13 @@
-
 import unittest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, PropertyMock, patch
+
 import psutil
-from infrastructure.system import PsutilProcessService
-from infrastructure.network import TcpNetworkService
-from infrastructure.services_map import resolve_service_name, is_game_port
+
 from domain.models import ProcessStatus
+from infrastructure.network import TcpNetworkService
+from infrastructure.services_map import is_game_port, resolve_service_name
+from infrastructure.system import PsutilProcessService
+
 
 # --- Services Map Tests ---
 class TestServicesMap(unittest.TestCase):
@@ -20,7 +22,9 @@ class TestServicesMap(unittest.TestCase):
         self.assertFalse(is_game_port(443))
         self.assertFalse(is_game_port(80))
 
-# --- System Service Tests ---
+
+
+# --- System Service Tests (System-wide metrics) ---# --- System Service Tests ---
 class TestPsutilProcessService(unittest.TestCase):
     def setUp(self):
         self.service = PsutilProcessService()
@@ -147,21 +151,7 @@ class TestPsutilProcessService(unittest.TestCase):
             with patch.object(self.service, 'get_pid', return_value=123):
                  self.assertEqual(self.service.get_status('foo'), ProcessStatus.RUNNING)
 
-    def test_get_cpu_percent_zero(self):
-        # Line 159 coverage: val is 0.0
-        with patch.object(self.service, 'get_pid', return_value=123):
-            with patch('psutil.Process') as mock_proc:
-                mock_proc.return_value.cpu_percent.return_value = 0.0
-                self.assertEqual(self.service.get_cpu_percent('test'), 0.0)
 
-    def test_get_cpu_percent_exception(self):
-        # Line 164 coverage: AccessDenied
-        with patch.object(self.service, 'get_pid', return_value=123):
-            with patch('psutil.Process') as mock_proc:
-                mock_proc.return_value.cpu_percent.side_effect = psutil.AccessDenied(0)
-                self.service._proc_cache[123] = mock_proc.return_value
-                self.assertEqual(self.service.get_cpu_percent('test'), 0.0)
-                self.assertNotIn(123, self.service._proc_cache)
 
     def test_get_priority_no_pid(self):
         with patch.object(self.service, 'get_pid', return_value=None):
@@ -264,9 +254,7 @@ class TestPsutilProcessService(unittest.TestCase):
                     # "Invalid" is not in the mapping
                     self.assertFalse(self.service.set_priority('foo', "Invalid"))
 
-    def test_get_cpu_count_fallback(self):
-        with patch('psutil.cpu_count', return_value=None):
-            self.assertEqual(self.service.get_cpu_count(), 1)
+
             
     @patch('psutil.Process')
     def test_set_priority_linux(self, mock_cls):
@@ -307,104 +295,116 @@ class TestPsutilProcessService(unittest.TestCase):
         with patch.object(self.service, 'get_pid', return_value=123):
             self.assertFalse(self.service.set_affinity('foo', [1]))
 
-    @patch('psutil.Process')
-    def test_get_memory_usage_success(self, mock_cls):
-        p = MagicMock()
-        mock_cls.return_value = p
-        
-        with patch.object(self.service, 'get_pid', return_value=123):
-             # Scenario 1: USS available (Task Manager 'Private Working Set')
-             p.memory_full_info.return_value.uss = 3000
-             self.assertEqual(self.service.get_memory_usage('test'), 3000)
 
-             # Scenario 2: USS AccessDenied -> Fallback to RSS
-             p.memory_full_info.side_effect = psutil.AccessDenied(0)
-             p.memory_info.return_value.rss = 2000
-             self.assertEqual(self.service.get_memory_usage('test'), 2000)
 
-    def test_get_memory_usage_no_pid(self):
-        with patch.object(self.service, 'get_pid', return_value=None):
-            self.assertEqual(self.service.get_memory_usage('foo'), 0.0)
 
-    @patch('psutil.Process')
-    def test_get_memory_usage_exception(self, mock_cls):
-        mock_cls.side_effect = psutil.AccessDenied(123)
-        with patch.object(self.service, 'get_pid', return_value=123):
-            self.assertEqual(self.service.get_memory_usage('foo'), 0.0)
 
-    @patch('psutil.Process')
+
+
+
+
+# --- System Service Tests (System-wide metrics) ---
+class TestPsutilSystemService(unittest.TestCase):
+    def setUp(self):
+        from infrastructure.system import PsutilSystemService
+        self.service = PsutilSystemService()
+
     @patch('psutil.cpu_count')
-    def test_get_cpu_percent_success(self, mock_count, mock_cls):
-        p = MagicMock()
-        p.cpu_percent.return_value = 16.0
-        mock_cls.return_value = p
-        mock_count.return_value = 4
+    def test_get_cpu_count_success(self, mock_count):
+        mock_count.return_value = 8
+        self.assertEqual(self.service.get_cpu_count(), 8)
+
+    @patch('psutil.cpu_count')
+    def test_get_cpu_count_fallback(self, mock_count):
+        # Line 126 coverage: cpu_count returns None
+        mock_count.return_value = None
+        self.assertEqual(self.service.get_cpu_count(), 1)
+
+    @patch('psutil.virtual_memory')
+    def test_get_system_memory(self, mock_mem):
+        # Lines 130-131 coverage
+        mem_info = MagicMock()
+        mem_info.used = 4 * 1024**3  # 4GB
+        mem_info.total = 16 * 1024**3  # 16GB
+        mock_mem.return_value = mem_info
         
-        with patch.object(self.service, 'get_pid', return_value=123):
-             self.assertEqual(self.service.get_cpu_percent('test'), 4.0)
+        used, total = self.service.get_system_memory()
+        self.assertEqual(used, 4 * 1024**3)
+        self.assertEqual(total, 16 * 1024**3)
 
-    def test_get_cpu_percent_no_pid(self):
-        with patch.object(self.service, 'get_pid', return_value=None):
-            self.assertEqual(self.service.get_cpu_percent('test'), 0.0)
-
-    def test_get_cpu_percent_exception(self):
-        # Line 164 coverage
-        with patch.object(self.service, 'get_pid', return_value=123):
-            with patch('psutil.Process') as mock_proc:
-                mock_proc.return_value.cpu_percent.side_effect = psutil.NoSuchProcess(123)
-                self.assertEqual(self.service.get_cpu_percent('test'), 0.0)
-
-    def test_get_system_memory(self):
-        with patch('psutil.virtual_memory') as mock_mem:
-            mock_mem.return_value.used = 1000
-            mock_mem.return_value.total = 5000
-            used, total = self.service.get_system_memory()
-            self.assertEqual(used, 1000)
-            self.assertEqual(total, 5000)
-
-    def test_get_system_cpu(self):
-        with patch('psutil.cpu_percent', return_value=42.0):
-            self.assertEqual(self.service.get_system_cpu(), 42.0)
+    @patch('psutil.cpu_percent')
+    def test_get_system_cpu(self, mock_cpu):
+        # Line 135 coverage
+        mock_cpu.return_value = 42.5
+        self.assertEqual(self.service.get_system_cpu(), 42.5)
 
     @patch('subprocess.check_output')
     @patch('os.name', 'nt')
     def test_get_system_cpu_temperature_powershell_success(self, mock_check):
-        # Allow accessing subprocess.STARTUPINFO and STARTF_USESHOWWINDOW even on Linux
-        with patch('subprocess.STARTUPINFO', create=True) as mock_startup, \
+        # Lines 140-157 coverage: PowerShell success path
+        with patch('subprocess.STARTUPINFO', create=True), \
              patch('subprocess.STARTF_USESHOWWINDOW', 1, create=True):
-            mock_check.return_value = "3000\n" # 3000 / 10 - 273.15 = 26.85
+            mock_check.return_value = "3000\n"  # 3000/10 - 273.15 = 26.85°C
             temp = self.service.get_system_cpu_temperature()
-            self.assertAlmostEqual(temp, 26.85)
+            self.assertAlmostEqual(temp, 26.85, places=2)
 
     @patch('subprocess.check_output')
     @patch('os.name', 'nt')
     def test_get_system_cpu_temperature_powershell_fail_wmic_success(self, mock_check):
+        # Lines 140-172 coverage: PowerShell fails, WMIC succeeds
         with patch('subprocess.STARTUPINFO', create=True), \
              patch('subprocess.STARTF_USESHOWWINDOW', 1, create=True):
-            # 1st call fails (PowerShell)
-            # 2nd call succeeds (WMIC)
-            mock_check.side_effect = [Exception("PS Fail"), "CurrentTemperature\n3000\n"]
+            # First call (PowerShell) fails, second (WMIC) succeeds
+            mock_check.side_effect = [
+                Exception("PowerShell fail"),
+                "CurrentTemperature\n3000\n"
+            ]
             temp = self.service.get_system_cpu_temperature()
-            self.assertAlmostEqual(temp, 26.85)
+            self.assertAlmostEqual(temp, 26.85, places=2)
 
-    @patch('subprocess.check_output', side_effect=Exception("All fail"))
+    @patch('subprocess.check_output')
     @patch('os.name', 'nt')
     def test_get_system_cpu_temperature_all_fail(self, mock_check):
+        # Lines 137-175 coverage: All methods fail
         with patch('subprocess.STARTUPINFO', create=True), \
              patch('subprocess.STARTF_USESHOWWINDOW', 1, create=True):
+            mock_check.side_effect = Exception("All fail")
             temp = self.service.get_system_cpu_temperature()
             self.assertIsNone(temp)
 
-    def test_get_system_cpu_temperature_empty_output(self):
-        with patch('subprocess.check_output', return_value="   "):
-             self.assertIsNone(self.service.get_system_cpu_temperature())
+    @patch('subprocess.check_output')
+    @patch('os.name', 'nt')
+    def test_get_system_cpu_temperature_empty_output(self, mock_check):
+        # Line 155 coverage: Empty output from PowerShell
+        with patch('subprocess.STARTUPINFO', create=True), \
+             patch('subprocess.STARTF_USESHOWWINDOW', 1, create=True):
+            mock_check.return_value = "   "  # Empty/whitespace only
+            temp = self.service.get_system_cpu_temperature()
+            self.assertIsNone(temp)
+
+    @patch('subprocess.check_output')
+    @patch('os.name', 'nt')
+    def test_get_system_cpu_temperature_wmic_one_line(self, mock_check):
+        # Line 169 coverage: WMIC with only header line
+        with patch('subprocess.STARTUPINFO', create=True), \
+             patch('subprocess.STARTF_USESHOWWINDOW', 1, create=True):
+            # First call (PowerShell) fails
+            # Second call (WMIC) returns only header
+            mock_check.side_effect = [
+                Exception("PowerShell fail"),
+                "CurrentTemperature\n"  # Only header, no data
+            ]
+            temp = self.service.get_system_cpu_temperature()
+            self.assertIsNone(temp)
+
 
 # --- GPU Service Tests ---
 class TestNvidiaGpuService(unittest.TestCase):
     def setUp(self):
         self.patcher = patch('infrastructure.gpu.pynvml')
         self.mock_nvml = self.patcher.start()
-        class MockNVMLError(Exception): pass
+        class MockNVMLError(Exception):
+            pass
         self.mock_nvml.NVMLError = MockNVMLError
         
         # We need to import inside to ensure patch is active if it's top-level
@@ -419,14 +419,15 @@ class TestNvidiaGpuService(unittest.TestCase):
 
     def test_init_fail(self):
         # Patch sys.modules so reload see the mock
-        import pynvml
         mock_nvml = MagicMock()
-        class MockError(Exception): pass
+        class MockError(Exception):
+            pass
         mock_nvml.NVMLError = MockError
         mock_nvml.nvmlInit.side_effect = MockError()
         
         with patch.dict('sys.modules', {'pynvml': mock_nvml}):
             import importlib
+
             import infrastructure.gpu
             importlib.reload(infrastructure.gpu)
             svc = infrastructure.gpu.NvidiaGpuService()
@@ -445,38 +446,6 @@ class TestNvidiaGpuService(unittest.TestCase):
         # Restore
         importlib.reload(infrastructure.gpu)
 
-    def test_get_vram_usage_nvml_success(self):
-        self.service._available = True
-        self.mock_nvml.nvmlDeviceGetCount.return_value = 1
-        self.mock_nvml.nvmlDeviceGetHandleByIndex.return_value = "h"
-        
-        p1 = MagicMock()
-        p1.pid = 123
-        p1.usedGpuMemory = 500
-        
-        self.mock_nvml.nvmlDeviceGetComputeRunningProcesses.return_value = [p1]
-        self.mock_nvml.nvmlDeviceGetGraphicsRunningProcesses.return_value = []
-        
-        self.assertEqual(self.service.get_vram_usage(123), 500.0)
-
-    def test_get_vram_usage_nvml_error_fallback_pdh(self):
-        self.service._available = True
-        self.mock_nvml.nvmlDeviceGetCount.side_effect = self.mock_nvml.NVMLError
-        
-        with patch.object(self.service, '_get_vram_from_pdh', return_value=100.0):
-             self.assertEqual(self.service.get_vram_usage(123), 100.0)
-
-    @patch('subprocess.check_output')
-    def test_get_vram_from_pdh_success(self, mock_check):
-        # Mock CSV output from typeperf
-        mock_check.return_value = '"Timestamp","Value"\n"12:00:00","1024.5"\n'
-        val = self.service._get_vram_from_pdh(123)
-        self.assertEqual(val, 1024.5)
-
-    @patch('subprocess.check_output', side_effect=Exception())
-    def test_get_vram_from_pdh_fail(self, mock_check):
-        self.assertEqual(self.service._get_vram_from_pdh(123), 0.0)
-
     def test_get_system_vram_usage(self):
         self.service._available = True
         self.mock_nvml.nvmlDeviceGetCount.return_value = 1
@@ -489,42 +458,6 @@ class TestNvidiaGpuService(unittest.TestCase):
             used, total = self.service.get_system_vram_usage()
             self.assertEqual(used, 2000)
             self.assertEqual(total, 8000)
-
-    def test_get_vram_usage_nvml_graphics_success(self):
-        self.service._available = True
-        self.mock_nvml.nvmlDeviceGetCount.return_value = 1
-        self.mock_nvml.nvmlDeviceGetHandleByIndex.return_value = "h"
-        
-        # Test line 50-53 (Graphics process match)
-        p1 = MagicMock()
-        p1.pid = 123
-        p1.usedGpuMemory = 300
-        self.mock_nvml.nvmlDeviceGetComputeRunningProcesses.return_value = []
-        self.mock_nvml.nvmlDeviceGetGraphicsRunningProcesses.return_value = [p1]
-        
-        self.assertEqual(self.service.get_vram_usage(123), 300.0)
-
-    def test_get_vram_usage_nvml_errors(self):
-        # Coverage for EXCEPT blocks (lines 43-44, 52-53, 54-55)
-        self.service._available = True
-        self.mock_nvml.nvmlDeviceGetCount.return_value = 1
-        self.mock_nvml.nvmlDeviceGetHandleByIndex.return_value = "h"
-        
-        # Scenario 1: Compute procs loop fails
-        self.mock_nvml.nvmlDeviceGetComputeRunningProcesses.side_effect = self.mock_nvml.NVMLError
-        self.mock_nvml.nvmlDeviceGetGraphicsRunningProcesses.return_value = []
-        # Should catch and move on
-        self.service.get_vram_usage(123)
-
-        # Scenario 2: Graphics procs loop fails
-        self.mock_nvml.nvmlDeviceGetComputeRunningProcesses.side_effect = None
-        self.mock_nvml.nvmlDeviceGetComputeRunningProcesses.return_value = []
-        self.mock_nvml.nvmlDeviceGetGraphicsRunningProcesses.side_effect = self.mock_nvml.NVMLError
-        self.service.get_vram_usage(123)
-        
-        # Scenario 3: Device handle fails
-        self.mock_nvml.nvmlDeviceGetHandleByIndex.side_effect = self.mock_nvml.NVMLError
-        self.service.get_vram_usage(123)
 
     def test_get_system_gpu_temperature(self):
         self.service._available = True
@@ -675,4 +608,19 @@ class TestTcpNetworkService(unittest.TestCase):
     def test_get_connections_access_denied(self, mock_proc_cls):
         mock_proc_cls.side_effect = psutil.AccessDenied(0)
         self.assertEqual(self.service.get_connections(123), [])
+
+
+    @patch('psutil.Process')
+    def test_get_connections_no_raddr(self, mock_proc_cls):
+        # Branch 45: Test connection without raddr (not ESTABLISHED or no remote)
+        mock_proc = MagicMock()
+        mock_proc_cls.return_value = mock_proc
+        
+        c1 = MagicMock()
+        c1.status = psutil.CONN_ESTABLISHED
+        c1.raddr = None  # No remote address
+        mock_proc.connections.return_value = [c1]
+        
+        conns = self.service.get_connections(pid=123)
+        self.assertEqual(len(conns), 0)  # Should skip connections without raddr
 

@@ -1,3 +1,5 @@
+game.monitor.json
+
 # Python
 __pycache__/
 *.py[cod]

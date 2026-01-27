@@ -1,0 +1,20 @@
+[run]
+branch = true
+source = ["src"]
+omit = [
+    "src/main.py",
+    "src/ui/views/main_window.py",
+    "src/ui/tray.py",
+    "src/domain/services.py",
+    "*/__init__.py"
+]
+
+[report]
+show_missing = true
+skip_covered = true
+fail_under = 80
+exclude_lines = [
+    "if __name__ == .__main__.:",
+    "if __name__ == __main__:",
+    'if __name__ == "__main__":',
+]

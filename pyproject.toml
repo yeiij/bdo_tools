@@ -7,7 +7,7 @@ name = "bdo-tools"
 version = "1.0.3"
 description = "Utilities for monitoring and interacting with Black Desert Online processes."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.14"
 dependencies = [
     "darkdetect>=0.8.0",
     "psutil>=5.9",
@@ -23,6 +23,7 @@ dev = [
     "pytest>=7.4",
     "pytest-cov",
     "coverage",
+    "ruff",
 ]
 
 [tool.setuptools]

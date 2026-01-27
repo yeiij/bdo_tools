@@ -1,0 +1,10 @@
+[environment]
+root = ["./src"]
+python-version = "3.14"
+
+[src]
+include = ["src"]
+exclude = ["tests"]
+
+[terminal]
+output-format = "concise"

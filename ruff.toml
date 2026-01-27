@@ -1,0 +1,6 @@
+line-length = 120
+target-version = "py314"
+
+[lint]
+select = ["E", "F", "I", "B", "UP", "N"]
+ignore = ["E203", "N803"]  # N803: Allow camelCase in UI (viewModel)

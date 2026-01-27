@@ -22,7 +22,10 @@ jobs:
           python-version: '3.14'
 
       - name: Install dependencies
-        run: make install
+        run: uv sync
+
+      - name: Run Linting (Ruff)
+        run: make lint
 
       - name: Run Tests
         run: make test
