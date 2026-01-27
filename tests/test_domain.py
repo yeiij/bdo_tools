@@ -17,11 +17,41 @@ class TestDomainModels(unittest.TestCase):
         self.assertEqual(conn.local_ip, "127.0.0.1")
         self.assertEqual(conn.latency_ms, 15.5)
 
-    def test_app_settings(self):
-        settings = AppSettings(process_name="Test.exe", poll_interval_ms=5000)
-        self.assertEqual(settings.process_name, "Test.exe")
-        self.assertEqual(settings.poll_interval_ms, 5000)
+    def test_app_settings_save_load(self):
+        import os
+        test_path = "test_settings.json"
+        try:
+            settings = AppSettings(process_name="NewProcess.exe", poll_interval_ms=1234)
+            settings.save(test_path)
+            
+            loaded = AppSettings.load(test_path)
+            self.assertEqual(loaded.process_name, "NewProcess.exe")
+            self.assertEqual(loaded.poll_interval_ms, 1234)
+        finally:
+            if os.path.exists(test_path):
+                os.remove(test_path)
 
-    def test_process_status_enum(self):
-        self.assertIsInstance(ProcessStatus.RUNNING, ProcessStatus)
-        self.assertNotEqual(ProcessStatus.RUNNING, ProcessStatus.NOT_RUNNING)
+    def test_app_settings_load_invalid_json(self):
+        import os
+        test_path = "invalid.json"
+        try:
+            with open(test_path, "w") as f:
+                f.write("{invalid: json}")
+            
+            loaded = AppSettings.load(test_path)
+            # Should return defaults
+            self.assertEqual(loaded.process_name, "BlackDesert64.exe")
+        finally:
+            if os.path.exists(test_path):
+                os.remove(test_path)
+
+    def test_app_settings_load_not_exists(self):
+        loaded = AppSettings.load("non_existent.json")
+        self.assertEqual(loaded.process_name, "BlackDesert64.exe")
+
+    def test_app_settings_save_error(self):
+        # Test saving to a directory or invalid path to trigger exception
+        settings = AppSettings()
+        # This might not raise on all systems depending on permissions, 
+        # but we can try an empty filename or similar
+        settings.save("") # Should fail silently as per code

@@ -8,6 +8,7 @@ _PORT_MAP = {
     8889: "Game Server",
     8884: "Game Server",
     8885: "Game Server",
+    60774: "Game Server",
     443: "Web/Auth",
     80: "HTTP",
     53: "DNS",
@@ -21,4 +22,4 @@ def resolve_service_name(port: int) -> str:
 def is_game_port(port: int) -> bool:
     """Return True if the port belongs to game traffic (not web/auth)."""
     # 8888, 8889, etc are game servers. 443, 80 are usually web/auth.
-    return port in (8888, 8889, 8884, 8885)
+    return port in (8888, 8889, 8884, 8885, 60774)
