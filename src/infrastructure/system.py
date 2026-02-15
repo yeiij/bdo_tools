@@ -19,9 +19,10 @@ class PsutilProcessService(IProcessService):
         """Return the PID of the first process matching process_name."""
         for proc in psutil.process_iter(["name", "pid"]):
             try:
-                if proc.info["name"].lower() == process_name.lower():
+                proc_name = proc.info.get("name")
+                if isinstance(proc_name, str) and proc_name.lower() == process_name.lower():
                     return proc.info["pid"]
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, AttributeError):
                 continue
         return None
 
@@ -67,7 +68,10 @@ class PsutilProcessService(IProcessService):
 
         try:
             p = psutil.Process(pid)
-            return p.cpu_affinity()
+            affinity = getattr(p, "cpu_affinity", None)
+            if not callable(affinity):
+                return []
+            return list(affinity())
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             return []
 
@@ -106,7 +110,10 @@ class PsutilProcessService(IProcessService):
 
         try:
             p = psutil.Process(pid)
-            p.cpu_affinity(cores)
+            affinity = getattr(p, "cpu_affinity", None)
+            if not callable(affinity):
+                return False
+            affinity(cores)
             return True
         except (psutil.AccessDenied, psutil.NoSuchProcess, ValueError):
             return False
@@ -138,9 +145,9 @@ class PsutilSystemService(ISystemService):
         # 1. Try PowerShell (Modern Windows)
         try:
             cmd = (
-                "powershell -Command \"Get-CimInstance -Namespace root\\wmi "
+                'powershell -Command "Get-CimInstance -Namespace root\\wmi '
                 "-ClassName MSAcpi_ThermalZoneTemperature | "
-                "Select-Object -ExpandProperty CurrentTemperature\""
+                'Select-Object -ExpandProperty CurrentTemperature"'
             )
 
             startupinfo = None
@@ -148,9 +155,7 @@ class PsutilSystemService(ISystemService):
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
-            output = subprocess.check_output(
-                cmd, startupinfo=startupinfo, text=True, stderr=subprocess.DEVNULL
-            )
+            output = subprocess.check_output(cmd, startupinfo=startupinfo, text=True, stderr=subprocess.DEVNULL)
             if output.strip():
                 temp_k10 = float(output.strip())
                 return (temp_k10 / 10.0) - 273.15
@@ -159,10 +164,7 @@ class PsutilSystemService(ISystemService):
 
         # 2. Try WMIC (Legacy Windows)
         try:
-            cmd = (
-                "wmic /namespace:\\\\root\\wmi PATH MSAcpi_ThermalZoneTemperature "
-                "get CurrentTemperature"
-            )
+            cmd = "wmic /namespace:\\\\root\\wmi PATH MSAcpi_ThermalZoneTemperature get CurrentTemperature"
             output = subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.DEVNULL)
             lines = output.strip().splitlines()
             if len(lines) > 1:

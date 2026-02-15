@@ -35,17 +35,30 @@ class AppSettings:
     network_target_priority: str | None = None
     network_target_affinity: list[int] | None = None
 
-    def save(self, path: str = "game.monitor.json"):
+    @staticmethod
+    def default_path() -> str:
+        """Return the default settings path for the current platform."""
+        if os.name == "nt":
+            base = os.getenv("LOCALAPPDATA") or os.path.expanduser("~\\AppData\\Local")
+        else:
+            base = os.getenv("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+        return os.path.join(base, "GameMonitor", "settings.json")
+
+    def save(self, path: str | None = None):
         """Save settings to a JSON file."""
-        with open(path, "w", encoding="utf-8") as f:
+        final_path = path or self.default_path()
+        parent = os.path.dirname(final_path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(final_path, "w", encoding="utf-8") as f:
             json.dump(asdict(self), f, indent=4)
 
     @classmethod
-    def load(cls, path: str = "game.monitor.json") -> AppSettings:
+    def load(cls, path: str | None = None) -> AppSettings:
         """Load settings from a JSON file."""
         data = {}
-        # Try new path first, then fallback to old path for migration
-        search_paths = [path, "bdo.monitor.json"]
+        # Try new path first, then fallback to old paths for migration.
+        search_paths = [path or cls.default_path(), "game.monitor.json", "bdo.monitor.json"]
 
         for p in search_paths:
             if os.path.exists(p):

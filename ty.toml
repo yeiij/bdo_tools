@@ -1,9 +1,9 @@
 [environment]
-root = ["./src"]
+root = ["."]
 python-version = "3.14"
 
 [src]
-include = ["src"]
+include = ["src", "main.py"]
 exclude = ["tests"]
 
 [terminal]

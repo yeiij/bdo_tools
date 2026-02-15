@@ -1,4 +1,4 @@
-game.monitor.json
+*.jsonl
 
 # Python
 __pycache__/

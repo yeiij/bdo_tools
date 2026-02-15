@@ -43,6 +43,15 @@ class TestPsutilProcessService(unittest.TestCase):
         pid = self.service.get_pid('target.exe')
         self.assertIsNone(pid)
 
+    @patch('psutil.process_iter')
+    def test_get_pid_none_name(self, mock_iter):
+        p = MagicMock()
+        p.info = {'name': None, 'pid': 123}
+        mock_iter.return_value = [p]
+
+        pid = self.service.get_pid('target.exe')
+        self.assertIsNone(pid)
+
     @patch('psutil.Process')
     def test_set_priority_success(self, mock_cls):
         mock_proc = MagicMock()
@@ -557,19 +566,19 @@ class TestTcpNetworkService(unittest.TestCase):
         conns = self.service.get_connections(pid=123)
         self.assertEqual(len(conns), 1)
         self.assertIsNone(conns[0].latency_ms)
-    @patch('infrastructure.network.tcp_ping')
-    def test_get_connections_with_ping_success(self, mock_ping):
-        mock_ping.return_value = 45.5
-        
+    @patch.object(TcpNetworkService, '_get_cached_latency', return_value=(45.5, False))
+    @patch.object(TcpNetworkService, '_schedule_ping')
+    def test_get_connections_with_ping_success(self, mock_schedule, mock_cached):
         with patch('psutil.Process') as mock_proc_cls:
             c1 = MagicMock()
             c1.status = psutil.CONN_ESTABLISHED
             c1.laddr = ('127.0.0.1', 5000)
             c1.raddr = ('8.8.8.8', 443)
             mock_proc_cls.return_value.connections.return_value = [c1]
-            
+
             conns = self.service.get_connections(pid=123)
             self.assertEqual(conns[0].latency_ms, 45.5)
+            mock_schedule.assert_not_called()
 
     def test_tcp_ping_success(self):
         # We need to test the actual tcp_ping function logic
@@ -614,4 +623,45 @@ class TestTcpNetworkService(unittest.TestCase):
         
         conns = self.service.get_connections(pid=123)
         self.assertEqual(len(conns), 0)  # Should skip connections without raddr
+
+    @patch('psutil.Process')
+    @patch.object(TcpNetworkService, '_get_cached_latency', return_value=(12.3, False))
+    @patch.object(TcpNetworkService, '_schedule_ping')
+    def test_get_connections_ipv6_tuple(self, mock_schedule, mock_cached, mock_proc_cls):
+        mock_proc = MagicMock()
+        mock_proc_cls.return_value = mock_proc
+
+        c1 = MagicMock()
+        c1.status = psutil.CONN_ESTABLISHED
+        c1.laddr = ('::1', 5000, 0, 0)
+        c1.raddr = ('2001:db8::1', 8888, 0, 0)
+        mock_proc.connections.return_value = [c1]
+
+        conns = self.service.get_connections(pid=123)
+        self.assertEqual(len(conns), 1)
+        self.assertEqual(conns[0].remote_ip, '2001:db8::1')
+        self.assertEqual(conns[0].remote_port, 8888)
+        self.assertEqual(conns[0].local_ip, '::1')
+        self.assertEqual(conns[0].latency_ms, 12.3)
+        mock_schedule.assert_not_called()
+
+    @patch('psutil.Process')
+    @patch.object(TcpNetworkService, '_get_cached_latency', return_value=(None, False))
+    @patch.object(TcpNetworkService, '_schedule_ping')
+    def test_get_connections_schedules_ping_when_cache_miss(
+        self, mock_schedule, mock_cached, mock_proc_cls
+    ):
+        mock_proc = MagicMock()
+        mock_proc_cls.return_value = mock_proc
+
+        c1 = MagicMock()
+        c1.status = psutil.CONN_ESTABLISHED
+        c1.laddr = ('127.0.0.1', 5000)
+        c1.raddr = ('8.8.8.8', 443)
+        mock_proc.connections.return_value = [c1]
+
+        conns = self.service.get_connections(pid=123)
+        self.assertEqual(len(conns), 1)
+        self.assertIsNone(conns[0].latency_ms)
+        mock_schedule.assert_called_once_with('8.8.8.8', 443)
 

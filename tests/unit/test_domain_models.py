@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from domain.models import AppSettings, ConnectionInfo
 
@@ -69,12 +70,15 @@ class TestDomainModels(unittest.TestCase):
             if os.path.exists(test_path):
                 os.remove(test_path)
 
-    def test_app_settings_save_error(self):
-        # Original test expected silent failure, but AppSettings.save() doesn't handle exceptions
-        # Updated to expect the FileNotFoundError that actually gets raised
+    def test_app_settings_save_default_path(self):
         settings = AppSettings()
-        with self.assertRaises((FileNotFoundError, OSError)):
-            settings.save("")  # Empty path raises FileNotFoundError
+        with patch.object(AppSettings, "default_path", return_value="test_default_settings.json"):
+            settings.save()
+            loaded = AppSettings.load("test_default_settings.json")
+            self.assertEqual(loaded.game_process_name, "BlackDesert64.exe")
+        import os
+        if os.path.exists("test_default_settings.json"):
+            os.remove("test_default_settings.json")
     def test_app_settings_load_legacy_keys_no_overwrite(self):
         # Test branch 75: when new key already exists, don't overwrite
         import os

@@ -1,6 +1,5 @@
 """Main ViewModel."""
 
-
 from domain.models import AppSettings, ConnectionInfo, ProcessStatus
 from domain.services import IGpuService, INetworkService, IProcessService, ISystemService
 
@@ -13,6 +12,7 @@ class MainViewModel:
         system_service: ISystemService,
         gpu_service: IGpuService,
         settings: AppSettings,
+        persist_settings_on_init: bool = True,
     ):
         self._process_service = process_service
         self._network_service = network_service
@@ -23,7 +23,9 @@ class MainViewModel:
         # UI State
         self.status = ProcessStatus.UNKNOWN
         self.connections: list[ConnectionInfo] = []
+        self.network_connections: list[ConnectionInfo] = []
         self.game_latency: float | None = None
+        self._last_game_latency: float | None = None
         self.priority: str = "Unknown"
         self.affinity: list[int] = []
         self.pid: int | None = None
@@ -53,7 +55,8 @@ class MainViewModel:
         self.network_target_priority = settings.network_target_priority
         self.network_target_affinity = settings.network_target_affinity
 
-        self.settings.save()
+        if persist_settings_on_init:
+            self.settings.save()
 
     def refresh(self):
         """Update all state and enforce policies."""
@@ -128,19 +131,25 @@ class MainViewModel:
         # Throttled network query (approx every 8s)
         if self.pid and self._refresh_count % 2 == 0:
             conns = self._network_service.get_connections(self.pid)
-            self._apply_network_annotations(conns)
+            self._apply_network_annotations(conns, exitlag_active=bool(self.network_pid))
             self.connections = conns
+            # When booster is active, sample its own external links as ping source.
+            if self.network_pid and self.network_pid != self.pid:
+                self.network_connections = self._network_service.get_connections(self.network_pid)
+            else:
+                self.network_connections = []
         elif not self.pid:
             self.connections = []
+            self.network_connections = []
 
-    def _apply_network_annotations(self, connections: list[ConnectionInfo]):
+    def _apply_network_annotations(self, connections: list[ConnectionInfo], exitlag_active: bool):
         """Identify proxy/booster traffic in connections."""
         for c in connections:
-            is_local = c.remote_ip in ("127.0.0.1", "::1", "localhost")
-            is_booster_port = c.remote_port not in (80, 443)
+            is_remote_local = c.remote_ip in ("127.0.0.1", "::1", "localhost")
+            is_non_web = c.remote_port not in (53, 80, 443)
 
-            if is_local and is_booster_port:
-                c.remote_ip = "ExitLag"  # Generic annotation
+            if exitlag_active and is_remote_local and is_non_web:
+                c.remote_ip = "ExitLag"
                 c.service_name = "Game Server"
 
     def _enforce_active_policies(self):
@@ -168,12 +177,8 @@ class MainViewModel:
                 self.network_affinity,
             )
             # Re-read to reflect actual state
-            self.network_priority = self._process_service.get_priority(
-                self.settings.network_process_name
-            )
-            self.network_affinity = self._process_service.get_affinity(
-                self.settings.network_process_name
-            )
+            self.network_priority = self._process_service.get_priority(self.settings.network_process_name)
+            self.network_affinity = self._process_service.get_affinity(self.settings.network_process_name)
 
     def _apply_policy(self, name, t_pri, t_aff, cur_pri, cur_aff):
         """Helper to set priority/affinity if needed."""
@@ -184,12 +189,62 @@ class MainViewModel:
 
     def _calculate_derived_metrics(self):
         """Extract higher-level metrics from raw data."""
+        loopbacks = ("127.0.0.1", "::1", "localhost")
+        if self.network_pid and self.network_connections:
+            direct_exitlag_non_web = [
+                c.latency_ms
+                for c in self.network_connections
+                if c.latency_ms is not None
+                and c.remote_ip not in loopbacks
+                and c.remote_port not in (53, 80, 443)
+            ]
+            direct_exitlag_any = [
+                c.latency_ms
+                for c in self.network_connections
+                if c.latency_ms is not None and c.remote_ip not in loopbacks
+            ]
+            selected_exitlag = direct_exitlag_non_web or direct_exitlag_any
+            if selected_exitlag:
+                selected_exitlag.sort()
+                self.game_latency = selected_exitlag[len(selected_exitlag) // 2]
+                self._last_game_latency = self.game_latency
+                return
+
         game_latencies = [
             c.latency_ms
             for c in self.connections
-            if c.latency_ms and "Game Server" in c.service_name
+            if c.latency_ms is not None and "Game Server" in c.service_name
         ]
-        self.game_latency = max(game_latencies) if game_latencies else None
+        direct_latencies = [
+            c.latency_ms
+            for c in self.connections
+            if c.latency_ms is not None and "Game Server" in c.service_name and c.remote_ip != "ExitLag"
+        ]
+
+        selected = direct_latencies
+        if not selected:
+            proxy_latencies = [
+                c.latency_ms
+                for c in self.connections
+                if c.latency_ms is not None
+                and "Game Server" in c.service_name
+                and c.remote_ip == "ExitLag"
+            ]
+            # Loopback connect latency from proxy hops is often near-zero and not representative.
+            if self.network_pid:
+                selected = [lat for lat in proxy_latencies if lat >= 5.0]
+            else:
+                selected = proxy_latencies or game_latencies
+
+        if selected:
+            # Median avoids spikes/flapping in UI while staying representative.
+            selected.sort()
+            self.game_latency = selected[len(selected) // 2]
+            self._last_game_latency = self.game_latency
+        elif self.pid and self._last_game_latency is not None:
+            self.game_latency = self._last_game_latency
+        else:
+            self.game_latency = None
 
     @property
     def is_network_active(self) -> bool:
@@ -198,19 +253,25 @@ class MainViewModel:
 
     # --- Manual Controls (Persistence + Immediate Application) ---
 
-    def set_manual_priority(self, priority: str):
+    def set_manual_priority(self, priority: str) -> bool:
+        if not self._process_service.set_priority(self.settings.game_process_name, priority):
+            self.refresh()
+            return False
         self.target_priority = priority
         self.settings.game_target_priority = priority
         self.settings.save()
-        self._process_service.set_priority(self.settings.game_process_name, priority)
         self.refresh()
+        return True
 
-    def set_network_manual_priority(self, priority: str):
+    def set_network_manual_priority(self, priority: str) -> bool:
+        if not self._process_service.set_priority(self.settings.network_process_name, priority):
+            self.refresh()
+            return False
         self.network_target_priority = priority
         self.settings.network_target_priority = priority
         self.settings.save()
-        self._process_service.set_priority(self.settings.network_process_name, priority)
         self.refresh()
+        return True
 
     def set_affinity(self, cores: list[int]) -> bool:
         if not self._process_service.set_affinity(self.settings.game_process_name, cores):

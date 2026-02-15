@@ -1,7 +1,7 @@
 # GameMonitor
 
-![Version](https://img.shields.io/badge/version-1.1.1-blue)
-![Python](https://img.shields.io/badge/python-3.9%2B-blue)
+![Version](https://img.shields.io/badge/version-1.1.2-blue)
+![Python](https://img.shields.io/badge/python-3.14%2B-blue)
 ![Coverage](https://img.shields.io/badge/coverage-99.59%25-brightgreen)
 ![Tests](https://img.shields.io/badge/tests-88%20passed-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -109,7 +109,7 @@ bdo_tools/
 | Layer          | Technology                                      |
 |----------------|-------------------------------------------------|
 | **UI**         | Tkinter (ttk), Sun Valley theme, pystray       |
-| **Domain**     | Pure Python 3.9+ with `dataclasses`, `Protocol`|
+| **Domain**     | Pure Python 3.14+ with `dataclasses`, `Protocol`|
 | **System**     | `psutil` (process/system metrics)              |
 | **GPU**        | `nvidia-ml-py` (pynvml - NVIDIA GPU monitoring)|
 | **Network**    | `socket`, `psutil` (TCP connection tracking)   |
@@ -179,7 +179,10 @@ uv run python main.py
 make run          # Run the application
 make test         # Run all tests (unit + integration + functional)
 make test-unit    # Run only unit tests
-make coverage     # Run tests with coverage report (99.59%)
+make typecheck    # Run ty type checker
+make coverage     # Generate HTML coverage report with pytest-cov
+make ping-trace   # Capture ping telemetry (JSONL)
+make ping-summary # Summarize captured ping telemetry
 make build        # Build standalone executable
 make lint         # Run ruff linter
 ```
@@ -190,7 +193,7 @@ make lint         # Run ruff linter
 # All tests (88 tests)
 make test
 
-# With coverage report
+# With HTML coverage report
 make coverage
 
 # Specific test categories
@@ -207,17 +210,17 @@ Run `make coverage` to see current coverage statistics.
 
 ### Application Settings
 
-Settings are auto-saved to `%LOCALAPPDATA%/GameMonitor/settings.json`:
+Settings are auto-saved to `%LOCALAPPDATA%/GameMonitor/settings.json` (Windows):
 
 ```json
 {
   "game_process_name": "BlackDesert64.exe",
   "network_process_name": "ExitLag.exe",
   "poll_interval_ms": 4000,
-  "target_game_priority": "High",
-  "target_game_affinity": [2, 3, 4, 5, 6, 7],
-  "target_network_priority": "High",
-  "target_network_affinity": [2, 3, 4, 5, 6, 7]
+  "game_target_priority": "High",
+  "game_target_affinity": [2, 3, 4, 5, 6, 7],
+  "network_target_priority": "High",
+  "network_target_affinity": [2, 3, 4, 5, 6, 7]
 }
 ```
 
@@ -256,7 +259,18 @@ Configurations in separate files (not `pyproject.toml`):
 - **ruff.toml**: Linting rules
 - **coverage.toml**: Coverage settings (excludes UI code)
 - **pytest.ini**: Test discovery and markers
-- **pyrightconfig.json**: Type checking (optional)
+- **ty.toml**: Type checking configuration (`ty`)
+
+### Ping Telemetry (Debug)
+
+Capture real samples to inspect ping behavior over time:
+
+```bash
+make ping-trace
+make ping-summary
+```
+
+This writes `ping_trace.jsonl` and prints a summary (min/median/max, source, top connections).
 
 ---
 
@@ -291,6 +305,9 @@ uv run python build_exe.py
 
 ### "Network process not detected"
 → Ensure the network process name in settings matches your VPN (e.g., `ExitLag.exe`)
+
+### "Ping differs from ExitLag"
+→ GameMonitor estimates latency from live TCP connection timing; ExitLag may display a different (smoothed/endpoint-specific) value
 
 ### Application doesn't minimize to tray
 → Check if `resources/icon.ico` exists. Rebuild with `make build`
@@ -328,7 +345,7 @@ Contributions welcome! Please follow these guidelines:
 | **Tests**         | 88 (all passing)|
 | **Dependencies**  | 7 core + 4 dev |
 | **Build Size**    | ~15MB         |
-| **Python**        | 3.9+          |
+| **Python**        | 3.14+         |
 
 ---
 
@@ -360,7 +377,6 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 - **Architecture Documentation**: See `docs/architecture.md` (if available)
 - **API Reference**: See inline docstrings
-- **Workflows**: `.agent/workflows/` for development guides
 - **Changelog**: See commit history or CHANGELOG.md
 
 ---

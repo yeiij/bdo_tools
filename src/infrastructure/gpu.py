@@ -1,10 +1,15 @@
 """GPU infrastructure services."""
 
+from typing import Any
 
+_pynvml: Any = None
 try:
-    import pynvml
+    import pynvml as imported_pynvml
+    _pynvml = imported_pynvml
 except ImportError:
-    pynvml = None
+    pass
+
+pynvml: Any = _pynvml
 
 from domain.services import IGpuService
 
@@ -12,14 +17,16 @@ from domain.services import IGpuService
 class NvidiaGpuService(IGpuService):
     def __init__(self):
         self._available = False
+        self._nvml: Any | None = None
 
-        if not pynvml:
+        if pynvml is None:
             return
+        self._nvml = pynvml
 
         try:
-            pynvml.nvmlInit()
+            self._nvml.nvmlInit()
             self._available = True
-        except pynvml.NVMLError:
+        except Exception:
             self._available = False
 
     def is_available(self) -> bool:
@@ -28,49 +35,49 @@ class NvidiaGpuService(IGpuService):
 
     def shutdown(self) -> None:
         """Shutdown the NVML library."""
-        if self._available:
+        if self._available and self._nvml is not None:
             try:
-                pynvml.nvmlShutdown()
-            except pynvml.NVMLError:
+                self._nvml.nvmlShutdown()
+            except Exception:
                 pass
 
     def get_system_vram_usage(self) -> tuple[float, float]:
         """Return (used_bytes, total_bytes) for all NVIDIA GPUs."""
-        if not self._available:
+        if not self._available or self._nvml is None:
             return 0.0, 0.0
 
         total_used = 0.0
         total_memory = 0.0
 
         try:
-            device_count = pynvml.nvmlDeviceGetCount()
+            device_count = self._nvml.nvmlDeviceGetCount()
             for i in range(device_count):
-                handle = pynvml.nvmlDeviceGetHandleByIndex(i)
-                mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
+                handle = self._nvml.nvmlDeviceGetHandleByIndex(i)
+                mem = self._nvml.nvmlDeviceGetMemoryInfo(handle)
                 total_used += mem.used
                 total_memory += mem.total
-        except pynvml.NVMLError:
+        except Exception:
             pass
 
         return total_used, total_memory
 
     def get_system_gpu_temperature(self) -> float | None:
         """Return the temperature of the primary NVIDIA GPU in Celsius."""
-        if not self._available:
+        if not self._available or self._nvml is None:
             return None
         try:
-            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-            return float(pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU))
-        except (pynvml.NVMLError, IndexError):
+            handle = self._nvml.nvmlDeviceGetHandleByIndex(0)
+            return float(self._nvml.nvmlDeviceGetTemperature(handle, self._nvml.NVML_TEMPERATURE_GPU))
+        except Exception:
             return None
 
     def get_system_gpu_usage(self) -> float | None:
         """Return the utilization percentage of the primary NVIDIA GPU."""
-        if not self._available:
+        if not self._available or self._nvml is None:
             return None
         try:
-            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-            rates = pynvml.nvmlDeviceGetUtilizationRates(handle)
+            handle = self._nvml.nvmlDeviceGetHandleByIndex(0)
+            rates = self._nvml.nvmlDeviceGetUtilizationRates(handle)
             return float(rates.gpu)
-        except (pynvml.NVMLError, IndexError):
+        except Exception:
             return None

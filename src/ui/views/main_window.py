@@ -46,9 +46,7 @@ class UIConstants:
 class ProcessControlBar(ttk.Frame):
     """A modular bar for controlling a process's priority and affinity."""
 
-    def __init__(
-        self, parent, process_name: str, on_priority_change: Callable, on_affinity_click: Callable
-    ):
+    def __init__(self, parent, process_name: str, on_priority_change: Callable, on_affinity_click: Callable):
         super().__init__(parent, padding=(10, 5))
         self.process_name = process_name
         self.on_priority_change = on_priority_change
@@ -81,34 +79,31 @@ class ProcessControlBar(ttk.Frame):
     def _handle_priority_change(self, event):
         val = self.priority_combo.get()
         if val:
-            self.on_priority_change(val)
+            ok = self.on_priority_change(val)
+            if ok is False:
+                messagebox.showerror("Error", "Failed to set priority. Run as Administrator and try again.")
 
-    def update_state(self, pid: int | None, priority: str, affinity: list[int], cpu_count: int):
+    def update_state(self, pid: int | None, priority: str, affinity: list[int], cpu_count: int, is_admin: bool):
         exists = bool(pid)
-        state = "readonly" if exists else "disabled"
-        btn_state = "normal" if exists else "disabled"
+        can_modify = exists and is_admin
+        state = "readonly" if can_modify else "disabled"
+        btn_state = "normal" if can_modify else "disabled"
 
         self.priority_combo.config(state=state)
         self.affinity_button.config(state=btn_state)
-        self.header_label.config(
-            foreground=UIConstants.FG_ACCENT if exists else UIConstants.FG_GREY
-        )
+        self.header_label.config(foreground=UIConstants.FG_ACCENT if exists else UIConstants.FG_GREY)
 
         if priority != self.priority_combo.get():
             self.priority_combo.set(priority)
 
         is_high = priority in ["Above Normal", "High", "Realtime"]
         self.priority_combo.configure(style="Success.TCombobox" if is_high else "TCombobox")
-        self.priority_combo["foreground"] = (
-            UIConstants.FG_SUCCESS if is_high else UIConstants.FG_WHITE
-        )
+        self.priority_combo["foreground"] = UIConstants.FG_SUCCESS if is_high else UIConstants.FG_WHITE
 
         aff_len = len(affinity) if affinity else 0
         self.affinity_val_label.config(text=f"{aff_len} cores")
         is_mod = 0 < aff_len < cpu_count
-        self.affinity_val_label.config(
-            foreground=UIConstants.FG_SUCCESS if is_mod else UIConstants.FG_WHITE
-        )
+        self.affinity_val_label.config(foreground=UIConstants.FG_SUCCESS if is_mod else UIConstants.FG_WHITE)
 
 
 class MetricCell(ttk.Frame):
@@ -116,9 +111,7 @@ class MetricCell(ttk.Frame):
 
     def __init__(self, parent, label: str, font_val=None):
         super().__init__(parent)
-        self.title_label = ttk.Label(
-            self, text=label, font=UIConstants.FONT_BOLD, foreground=UIConstants.FG_GREY
-        )
+        self.title_label = ttk.Label(self, text=label, font=UIConstants.FONT_BOLD, foreground=UIConstants.FG_GREY)
         self.title_label.pack(side=tk.TOP, anchor="w")
         self.value_label = ttk.Label(
             self,
@@ -234,16 +227,12 @@ class MainWindow(ttk.Frame):
             grid.rowconfigure(i, weight=1)
 
         # 3. Footer
-        ttk.Label(self, text="by: JasonREDUX", foreground="#555555").pack(
-            side=tk.BOTTOM, anchor="se", padx=5
-        )
+        ttk.Label(self, text="by: JasonREDUX", foreground="#555555").pack(side=tk.BOTTOM, anchor="se", padx=5)
 
     def _setup_tray(self):
         try:
             icon_path = resource_path("resources/icon.ico")
-            self.tray_icon = SystemTrayIcon(
-                icon_path, on_show=self.show_window, on_quit=self._quit_app
-            )
+            self.tray_icon = SystemTrayIcon(icon_path, on_show=self.show_window, on_quit=self._quit_app)
         except Exception:
             pass
 
@@ -287,9 +276,7 @@ class MainWindow(ttk.Frame):
 
         container = ttk.Frame(dialog, padding=10)
         container.pack(fill=tk.BOTH, expand=True)
-        ttk.Label(container, text="Select CPU Cores:", font=UIConstants.FONT_BOLD).pack(
-            anchor="w", pady=(0, 10)
-        )
+        ttk.Label(container, text="Select CPU Cores:", font=UIConstants.FONT_BOLD).pack(anchor="w", pady=(0, 10))
 
         canvas = tk.Canvas(container, highlightthickness=0)
         scrollable = ttk.Frame(canvas)
@@ -358,20 +345,17 @@ class MainWindow(ttk.Frame):
         self.root.title(f"Game Monitor{' - Admin Required' if not self.vm.is_admin else ''}")
 
         # Bars
-        self.game_bar.update_state(
-            self.vm.pid, self.vm.priority, self.vm.affinity, self.vm.cpu_count
-        )
+        self.game_bar.update_state(self.vm.pid, self.vm.priority, self.vm.affinity, self.vm.cpu_count, self.vm.is_admin)
         self.network_bar.update_state(
             self.vm.network_pid,
             self.vm.network_priority,
             self.vm.network_affinity,
             self.vm.cpu_count,
+            self.vm.is_admin,
         )
 
         # Cells
-        self.cell_ping.set_value(
-            f"{self.vm.game_latency:.0f}" if self.vm.game_latency is not None else "--"
-        )
+        self.cell_ping.set_value(f"{self.vm.game_latency:.0f}" if self.vm.game_latency is not None else "--")
         self.cell_gpu.set_value(self.vm.gpu_usage_str)
         self.cell_vram.set_value(self.vm.vram_display_str, self.vm.vram_total_label)
         self.cell_gpu_temp.set_value(self.vm.gpu_temp_str)
