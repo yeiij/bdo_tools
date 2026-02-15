@@ -77,7 +77,7 @@ class TestUI(unittest.TestCase):
         vm = MagicMock()
         vm.settings.game_process_name = "game.exe"
         vm.settings.network_process_name = "net.exe"
-        vm.settings.poll_interval_ms = 4000
+        vm.settings.interval = 4000
         vm.cpu_count = 16
         vm.pid = 123
         vm.priority = "High"
@@ -103,7 +103,7 @@ class TestUI(unittest.TestCase):
         vm.cpu_count = 16
         vm.settings.game_process_name = "game.exe"
         vm.settings.network_process_name = "net.exe"
-        vm.settings.poll_interval_ms = 4000
+        vm.settings.interval = 4000
         
         root = m_tk.Tk()
         window = main_window_cls(root, vm)

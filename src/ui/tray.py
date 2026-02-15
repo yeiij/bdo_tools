@@ -29,11 +29,11 @@ class SystemTrayIcon:
             return
 
         menu = pystray.Menu(
-            pystray.MenuItem("Open GameMonitor", self._show_action, default=True),
+            pystray.MenuItem("Open GamerMonitor", self._show_action, default=True),
             pystray.MenuItem("Quit", self._quit_action),
         )
 
-        self.icon = pystray.Icon("game_monitor", image, "GameMonitor", menu)
+        self.icon = pystray.Icon("gamer_monitor", image, "GamerMonitor", menu)
 
         self._thread = threading.Thread(target=self.icon.run, daemon=True)
         self._thread.start()

@@ -38,18 +38,18 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/GameMonitor.exe
+          files: dist/GamerMonitor.exe
           generate_release_notes: true
           draft: false
           prerelease: false
           body: |
-            ## GameMonitor ${{ github.ref_name }}
+            ## GamerMonitor ${{ github.ref_name }}
             
             ### Download
-            - **GameMonitor.exe** - Standalone Windows executable
+            - **GamerMonitor.exe** - Standalone Windows executable
             
             ### Installation
-            1. Download `GameMonitor.exe`
+            1. Download `GamerMonitor.exe`
             2. Run as Administrator for optimization features
             
             ### What's Changed

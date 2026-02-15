@@ -12,7 +12,13 @@ class TestMainViewModel(unittest.TestCase):
         self.mock_network = MagicMock()
         self.mock_system = MagicMock()
         self.mock_gpu = MagicMock()
-        self.settings = AppSettings(game_process_name="Test.exe", game_target_affinity=[])
+        self.settings = AppSettings(
+            game_process_name="Test.exe",
+            game_target_priority="Normal",
+            game_target_affinity=[],
+            network_target_priority="Normal",
+            network_target_affinity=[],
+        )
         
         # Setup process service mock behavior
         self.mock_process.is_admin.return_value = True
@@ -65,8 +71,6 @@ class TestMainViewModel(unittest.TestCase):
         )
         self.mock_network.get_connections.return_value = [conn]
         
-        # Action (Call twice because network is throttled to every 2nd refresh)
-        self.vm.refresh()
         self.vm.refresh()
         
         # Assert
@@ -89,18 +93,18 @@ class TestMainViewModel(unittest.TestCase):
         self.assertIsNone(self.vm.pid)
         self.assertEqual(self.vm.connections, [])
 
-    def test_refresh_throttling_logic(self):
+    def test_refresh_queries_network_each_cycle(self):
         self.mock_process.get_status.return_value = ProcessStatus.RUNNING
         self.mock_process.get_pid.return_value = 123
         self.mock_network.get_connections.return_value = []
-        
-        # 1st refresh: count=1, 1%2 != 0 -> No network poll
-        self.vm.refresh()
-        self.mock_network.get_connections.assert_not_called()
-        
-        # 2nd refresh: count=2, 2%2 == 0 -> Network poll
+
+        # 1st refresh: network poll
         self.vm.refresh()
         self.mock_network.get_connections.assert_called_once()
+
+        # 2nd refresh: another network poll
+        self.vm.refresh()
+        self.assertEqual(self.mock_network.get_connections.call_count, 2)
 
     def test_exitlag_annotation(self):
         self.mock_process.get_status.return_value = ProcessStatus.RUNNING
@@ -115,7 +119,7 @@ class TestMainViewModel(unittest.TestCase):
         self.mock_process.get_pid.side_effect = pid_for_name
         
         
-        # Case 1: Dynamic Port (Localhost + Random High Port) -> ExitLag
+        # Case 1: Dynamic Port (Localhost + Random High Port) -> network proxy label
         conn1 = ConnectionInfo(123, "127.0.0.1", 50000, "127.0.0.1", 53600, "EST", "Unknown")
         # Case 2: Standard Localhost (Web/Auth on port 443) -> Should remain IP
         conn2 = ConnectionInfo(123, "127.0.0.1", 50000, "127.0.0.1", 443, "EST", "Web")
@@ -124,12 +128,11 @@ class TestMainViewModel(unittest.TestCase):
         
         self.mock_network.get_connections.return_value = [conn1, conn2, conn3]
         
-        # Refresh 2 times to trigger network update
-        self.vm.refresh()
+        # Refresh to trigger network update
         self.vm.refresh()
         
-        # Conn1: localhost with high port -> ExitLag
-        self.assertEqual(self.vm.connections[0].remote_ip, "ExitLag")
+        # Conn1: localhost with high port -> network proxy label
+        self.assertEqual(self.vm.connections[0].remote_ip, self.settings.network_process_name)
         self.assertEqual(self.vm.connections[0].service_name, "Game Server")
         
         # Conn2: localhost but port 443 (not booster) -> keeps IP
@@ -156,7 +159,6 @@ class TestMainViewModel(unittest.TestCase):
         self.mock_network.get_connections.return_value = [conn]
 
         self.vm.refresh()
-        self.vm.refresh()
 
         self.assertEqual(self.vm.connections[0].remote_ip, "127.0.0.1")
         self.assertEqual(self.vm.connections[0].service_name, "Unknown")
@@ -168,7 +170,7 @@ class TestMainViewModel(unittest.TestCase):
         
         self.vm.refresh()
         
-        self.mock_process.set_priority.assert_called_with(self.settings.game_process_name, "High")
+        self.mock_process.set_priority.assert_any_call(self.settings.game_process_name, "High")
 
     def test_affinity_watchdog(self):
         self.mock_process.get_status.return_value = ProcessStatus.RUNNING
@@ -187,7 +189,7 @@ class TestMainViewModel(unittest.TestCase):
             self.assertEqual(self.vm.target_priority, "High")
             self.assertEqual(self.settings.game_target_priority, "High")
             mock_save.assert_called_once()
-            self.mock_process.set_priority.assert_called_with(self.settings.game_process_name, "High")
+            self.mock_process.set_priority.assert_any_call(self.settings.game_process_name, "High")
 
     def test_set_manual_priority_failure(self):
         self.vm.target_priority = "Normal"
@@ -294,7 +296,7 @@ class TestMainViewModel(unittest.TestCase):
     def test_is_network_active_property(self):
         # Line 198 coverage:  Test is_network_active property
         from domain.models import ConnectionInfo
-        conn1 = ConnectionInfo(123, '127.0.0.1', 50000, 'ExitLag', 53600, 'EST', 'Game Server')
+        conn1 = ConnectionInfo(123, '127.0.0.1', 50000, self.settings.network_process_name, 53600, 'EST', 'Game Server')
         conn2 = ConnectionInfo(123, '127.0.0.1', 50001, '8.8.8.8', 443, 'EST', 'Web')
         self.vm.connections = [conn1, conn2]
         self.assertTrue(self.vm.is_network_active)
@@ -310,7 +312,16 @@ class TestMainViewModel(unittest.TestCase):
     def test_game_latency_prefers_direct_over_exitlag(self):
         self.vm.pid = 123
         self.vm.connections = [
-            ConnectionInfo(123, "127.0.0.1", 50000, "ExitLag", 53600, "EST", "Game Server", latency_ms=1.0),
+            ConnectionInfo(
+                123,
+                "127.0.0.1",
+                50000,
+                self.settings.network_process_name,
+                53600,
+                "EST",
+                "Game Server",
+                latency_ms=1.0,
+            ),
             ConnectionInfo(123, "127.0.0.1", 50001, "10.0.0.5", 60774, "EST", "Game Server", latency_ms=25.0),
         ]
         self.vm._calculate_derived_metrics()
@@ -332,8 +343,26 @@ class TestMainViewModel(unittest.TestCase):
         self.vm.pid = 123
         self.vm.network_pid = 999
         self.vm.connections = [
-            ConnectionInfo(123, "127.0.0.1", 50000, "ExitLag", 53600, "EST", "Game Server", latency_ms=1.0),
-            ConnectionInfo(123, "127.0.0.1", 50001, "ExitLag", 53601, "EST", "Game Server", latency_ms=25.0),
+            ConnectionInfo(
+                123,
+                "127.0.0.1",
+                50000,
+                self.settings.network_process_name,
+                53600,
+                "EST",
+                "Game Server",
+                latency_ms=1.0,
+            ),
+            ConnectionInfo(
+                123,
+                "127.0.0.1",
+                50001,
+                self.settings.network_process_name,
+                53601,
+                "EST",
+                "Game Server",
+                latency_ms=25.0,
+            ),
         ]
         self.vm._calculate_derived_metrics()
         self.assertEqual(self.vm.game_latency, 25.0)
@@ -342,8 +371,26 @@ class TestMainViewModel(unittest.TestCase):
         self.vm.pid = 123
         self.vm.network_pid = 999
         self.vm.connections = [
-            ConnectionInfo(123, "127.0.0.1", 50000, "ExitLag", 53600, "EST", "Game Server", latency_ms=1.0),
-            ConnectionInfo(123, "127.0.0.1", 50001, "ExitLag", 53601, "EST", "Game Server", latency_ms=10.0),
+            ConnectionInfo(
+                123,
+                "127.0.0.1",
+                50000,
+                self.settings.network_process_name,
+                53600,
+                "EST",
+                "Game Server",
+                latency_ms=1.0,
+            ),
+            ConnectionInfo(
+                123,
+                "127.0.0.1",
+                50001,
+                self.settings.network_process_name,
+                53601,
+                "EST",
+                "Game Server",
+                latency_ms=10.0,
+            ),
         ]
         self.vm.network_connections = [
             ConnectionInfo(999, "10.0.0.3", 52000, "45.223.19.187", 60774, "EST", "Unknown", latency_ms=25.0),
@@ -351,3 +398,149 @@ class TestMainViewModel(unittest.TestCase):
         ]
         self.vm._calculate_derived_metrics()
         self.assertEqual(self.vm.game_latency, 27.0)
+
+    def test_game_latency_exposes_current_low_and_peak(self):
+        self.vm.pid = 123
+        self.vm.connections = [
+            ConnectionInfo(123, "127.0.0.1", 50001, "10.0.0.5", 60774, "EST", "Game Server", latency_ms=20.0),
+        ]
+        self.vm._calculate_derived_metrics()
+        self.assertEqual(self.vm.game_latency_current, 20.0)
+        self.assertEqual(self.vm.game_latency_low, 20.0)
+        self.assertEqual(self.vm.game_latency_peak, 20.0)
+
+        self.vm.connections = [
+            ConnectionInfo(123, "127.0.0.1", 50001, "10.0.0.5", 60774, "EST", "Game Server", latency_ms=80.0),
+        ]
+        self.vm._calculate_derived_metrics()
+        self.assertEqual(self.vm.game_latency_current, 80.0)
+        self.assertEqual(self.vm.game_latency_low, 20.0)
+        self.assertEqual(self.vm.game_latency_peak, 80.0)
+
+        self.vm.connections = [
+            ConnectionInfo(123, "127.0.0.1", 50001, "10.0.0.5", 60774, "EST", "Game Server", latency_ms=30.0),
+        ]
+        self.vm._calculate_derived_metrics()
+        self.assertEqual(self.vm.game_latency_current, 30.0)
+        self.assertEqual(self.vm.game_latency_low, 20.0)
+        self.assertEqual(self.vm.game_latency_peak, 80.0)
+
+    def test_refresh_seeds_missing_targets_from_running_process(self):
+        settings = AppSettings(
+            game_process_name="Test.exe",
+            network_process_name="ExitLag.exe",
+            game_target_priority=None,
+            game_target_affinity=None,
+            network_target_priority=None,
+            network_target_affinity=None,
+        )
+        vm = MainViewModel(
+            self.mock_process,
+            self.mock_network,
+            self.mock_system,
+            self.mock_gpu,
+            settings,
+            persist_settings_on_init=False,
+        )
+
+        def pid_for_name(name):
+            if name == settings.game_process_name:
+                return 123
+            if name == settings.network_process_name:
+                return 999
+            return None
+
+        self.mock_process.get_status.return_value = ProcessStatus.RUNNING
+        self.mock_process.get_pid.side_effect = pid_for_name
+        self.mock_process.get_priority.side_effect = (
+            lambda name: "High" if name == settings.game_process_name else "Above Normal"
+        )
+        self.mock_process.get_affinity.side_effect = (
+            lambda name: [2, 3, 4, 5] if name == settings.game_process_name else [6, 7]
+        )
+        self.mock_network.get_connections.return_value = []
+
+        with patch.object(settings, "save") as mock_save:
+            vm.refresh()
+
+        self.assertEqual(settings.game_target_priority, "High")
+        self.assertEqual(settings.game_target_affinity, [2, 3, 4, 5])
+        self.assertEqual(settings.network_target_priority, "Above Normal")
+        self.assertEqual(settings.network_target_affinity, [6, 7])
+        mock_save.assert_called_once()
+
+    def test_refresh_does_not_override_existing_targets(self):
+        settings = AppSettings(
+            game_process_name="Test.exe",
+            game_target_priority="Normal",
+            game_target_affinity=[0, 1],
+            network_process_name="ExitLag.exe",
+            network_target_priority="High",
+            network_target_affinity=[2, 3],
+        )
+        vm = MainViewModel(
+            self.mock_process,
+            self.mock_network,
+            self.mock_system,
+            self.mock_gpu,
+            settings,
+            persist_settings_on_init=False,
+        )
+        self.mock_process.get_status.return_value = ProcessStatus.RUNNING
+        self.mock_process.get_pid.side_effect = lambda name: 123 if name == settings.game_process_name else 999
+        self.mock_process.get_priority.return_value = "Above Normal"
+        self.mock_process.get_affinity.return_value = [4, 5, 6, 7]
+        self.mock_network.get_connections.return_value = []
+
+        with patch.object(settings, "save") as mock_save:
+            vm.refresh()
+
+        self.assertEqual(settings.game_target_priority, "Normal")
+        self.assertEqual(settings.game_target_affinity, [0, 1])
+        self.assertEqual(settings.network_target_priority, "High")
+        self.assertEqual(settings.network_target_affinity, [2, 3])
+        mock_save.assert_not_called()
+
+    def test_refresh_enforces_other_targets(self):
+        settings = AppSettings(
+            game_process_name="Test.exe",
+            game_target_priority="Normal",
+            game_target_affinity=[0, 1],
+            other_targets=[
+                {"process": "Discord.exe", "role": "other", "priority": "Below Normal", "affinity": [2, 3, 4]}
+            ],
+        )
+        vm = MainViewModel(
+            self.mock_process,
+            self.mock_network,
+            self.mock_system,
+            self.mock_gpu,
+            settings,
+            persist_settings_on_init=False,
+        )
+
+        self.mock_process.get_status.return_value = ProcessStatus.RUNNING
+        self.mock_process.get_pid.side_effect = lambda name: 123 if name == settings.game_process_name else None
+
+        def priority_for_name(name):
+            if name == settings.game_process_name:
+                return "Normal"
+            if name == "Discord.exe":
+                return "Normal"
+            return "Unknown"
+
+        def affinity_for_name(name):
+            if name == settings.game_process_name:
+                return [0, 1]
+            if name == "Discord.exe":
+                return [0, 1]
+            return []
+
+        self.mock_process.get_priority.side_effect = priority_for_name
+        self.mock_process.get_affinity.side_effect = affinity_for_name
+        self.mock_network.get_connections.return_value = []
+
+        vm.refresh()
+
+        self.mock_process.set_priority.assert_any_call("Discord.exe", "Below Normal")
+        self.mock_process.set_affinity.assert_any_call("Discord.exe", [2, 3, 4])

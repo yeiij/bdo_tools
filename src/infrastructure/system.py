@@ -15,16 +15,43 @@ class PsutilProcessService(IProcessService):
     def __init__(self):
         pass
 
+    def _get_matching_pids(self, process_name: str) -> list[int]:
+        """Return all PIDs matching a process name (case-insensitive)."""
+        pids: list[int] = []
+        try:
+            iterator = psutil.process_iter(["name", "pid"])
+        except Exception:
+            return pids
+        try:
+            for proc in iterator:
+                try:
+                    proc_name = proc.info.get("name")
+                    pid = proc.info.get("pid")
+                    if (
+                        isinstance(proc_name, str)
+                        and isinstance(pid, int)
+                        and proc_name.lower() == process_name.lower()
+                    ):
+                        pids.append(pid)
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, AttributeError):
+                    continue
+        except Exception:
+            return pids
+        return pids
+
+    def _get_target_pids(self, process_name: str) -> list[int]:
+        """Resolve target PIDs for operations; includes all matching processes when available."""
+        pids = self._get_matching_pids(process_name)
+        if pids:
+            return pids
+        # Compatibility fallback used heavily by tests/mocks.
+        pid = self.get_pid(process_name)
+        return [pid] if pid else []
+
     def get_pid(self, process_name: str) -> int | None:
         """Return the PID of the first process matching process_name."""
-        for proc in psutil.process_iter(["name", "pid"]):
-            try:
-                proc_name = proc.info.get("name")
-                if isinstance(proc_name, str) and proc_name.lower() == process_name.lower():
-                    return proc.info["pid"]
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, AttributeError):
-                continue
-        return None
+        pids = self._get_matching_pids(process_name)
+        return pids[0] if pids else None
 
     def get_status(self, process_name: str) -> ProcessStatus:
         """Return the status of the process."""
@@ -76,13 +103,14 @@ class PsutilProcessService(IProcessService):
             return []
 
     def set_priority(self, process_name: str, priority: str) -> bool:
-        """Set the process priority class."""
-        pid = self.get_pid(process_name)
-        if not pid:
+        """Set priority class on all processes matching name."""
+        pids = self._get_target_pids(process_name)
+        if not pids:
             return False
 
+        changed_any = False
+        failed_any = False
         try:
-            p = psutil.Process(pid)
             if platform.system() == "Windows":
                 mapping = {
                     "Idle": psutil.IDLE_PRIORITY_CLASS,
@@ -95,28 +123,41 @@ class PsutilProcessService(IProcessService):
                 target_val = mapping.get(priority)
                 if target_val is None:
                     return False
-                p.nice(target_val)
             else:
-                p.nice(0 if priority.lower() == "normal" else -10)
-            return True
-        except (psutil.AccessDenied, psutil.NoSuchProcess, ValueError):
+                target_val = 0 if priority.lower() == "normal" else -10
+
+            for pid in pids:
+                try:
+                    psutil.Process(pid).nice(target_val)
+                    changed_any = True
+                except (psutil.AccessDenied, psutil.NoSuchProcess, ValueError):
+                    failed_any = True
+                    continue
+            return changed_any and not failed_any
+        except Exception:
             return False
 
     def set_affinity(self, process_name: str, cores: list[int]) -> bool:
-        """Set the process CPU affinity."""
-        pid = self.get_pid(process_name)
-        if not pid:
+        """Set CPU affinity on all processes matching name."""
+        pids = self._get_target_pids(process_name)
+        if not pids:
             return False
 
-        try:
-            p = psutil.Process(pid)
-            affinity = getattr(p, "cpu_affinity", None)
-            if not callable(affinity):
-                return False
-            affinity(cores)
-            return True
-        except (psutil.AccessDenied, psutil.NoSuchProcess, ValueError):
-            return False
+        changed_any = False
+        failed_any = False
+        for pid in pids:
+            try:
+                p = psutil.Process(pid)
+                affinity = getattr(p, "cpu_affinity", None)
+                if not callable(affinity):
+                    failed_any = True
+                    continue
+                affinity(cores)
+                changed_any = True
+            except (psutil.AccessDenied, psutil.NoSuchProcess, ValueError):
+                failed_any = True
+                continue
+        return changed_any and not failed_any
 
     def is_admin(self) -> bool:
         """Check if the current process has administrator privileges."""

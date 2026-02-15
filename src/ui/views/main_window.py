@@ -200,8 +200,14 @@ class MainWindow(ttk.Frame):
         grid = ttk.Frame(self, padding=(20, 5))
         grid.pack(fill=tk.BOTH, expand=True)
 
-        self.cell_ping = MetricCell(grid, "Ping", UIConstants.FONT_PING_VALUE)
+        self.cell_ping = MetricCell(grid, "Ping Now", UIConstants.FONT_PING_VALUE)
         self.cell_ping.grid(row=0, column=0, sticky="w", padx=10, pady=5)
+
+        self.cell_ping_low = MetricCell(grid, "Ping Low")
+        self.cell_ping_low.grid(row=0, column=1, sticky="w", padx=10, pady=5)
+
+        self.cell_ping_peak = MetricCell(grid, "Ping Peak")
+        self.cell_ping_peak.grid(row=0, column=2, sticky="w", padx=10, pady=5)
 
         self.cell_gpu = MetricCell(grid, "GPU")
         self.cell_gpu.grid(row=1, column=0, sticky="w", padx=10, pady=5)
@@ -257,6 +263,18 @@ class MainWindow(ttk.Frame):
         self.root.focus_force()
 
     def _quit_app(self):
+        try:
+            reload_settings = getattr(self.vm, "_reload_settings_if_changed", None)
+            if callable(reload_settings):
+                reload_settings()
+            save_settings = getattr(self.vm, "_save_settings", None)
+            if callable(save_settings):
+                save_settings()
+            else:
+                self.vm.settings.save()
+        except Exception:
+            # Best-effort persistence; shutdown should still proceed.
+            pass
         if self.tray_icon:
             self.tray_icon.stop()
         self.root.destroy()
@@ -337,12 +355,12 @@ class MainWindow(ttk.Frame):
     def refresh_loop(self):
         self.vm.refresh()
         self.update_view()
-        self.root.after(self.vm.settings.poll_interval_ms, self.refresh_loop)
+        self.root.after(self.vm.settings.interval, self.refresh_loop)
 
     def update_view(self):
         """Update all widgets from VM state."""
         # Title
-        self.root.title(f"Game Monitor{' - Admin Required' if not self.vm.is_admin else ''}")
+        self.root.title(f"GamerMonitor{' - Admin Required' if not self.vm.is_admin else ''}")
 
         # Bars
         self.game_bar.update_state(self.vm.pid, self.vm.priority, self.vm.affinity, self.vm.cpu_count, self.vm.is_admin)
@@ -355,7 +373,17 @@ class MainWindow(ttk.Frame):
         )
 
         # Cells
-        self.cell_ping.set_value(f"{self.vm.game_latency:.0f}" if self.vm.game_latency is not None else "--")
+        ping_title = "Ping Now"
+        if self.vm.network_pid and self.vm.settings.network_process_name:
+            ping_title = f"Ping Now ({self.vm.settings.network_process_name})"
+        now_latency = self._format_ping(getattr(self.vm, "game_latency_current", self.vm.game_latency))
+        low_latency = self._format_ping(getattr(self.vm, "game_latency_low", self.vm.game_latency))
+        peak_latency = self._format_ping(getattr(self.vm, "game_latency_peak", self.vm.game_latency))
+
+        self.cell_ping.set_value(now_latency, ping_title)
+        self.cell_ping_low.set_value(low_latency)
+        self.cell_ping_peak.set_value(peak_latency)
+        self.cell_ping.value_label.config(foreground=UIConstants.FG_WHITE)
         self.cell_gpu.set_value(self.vm.gpu_usage_str)
         self.cell_vram.set_value(self.vm.vram_display_str, self.vm.vram_total_label)
         self.cell_gpu_temp.set_value(self.vm.gpu_temp_str)
@@ -363,10 +391,16 @@ class MainWindow(ttk.Frame):
         self.cell_ram.set_value(self.vm.ram_used_str, self.vm.ram_total_label)
         self.cell_cpu_temp.set_value(self.vm.cpu_temp_str)
 
+    @staticmethod
+    def _format_ping(value) -> str:
+        if isinstance(value, (int, float)):
+            return f"{value:.0f}"
+        return "--"
+
 
 def start_app(viewModel: MainViewModel):
     root = tk.Tk()
-    root.title("Game Monitor")
+    root.title("GamerMonitor")
     root.resizable(False, False)
 
     try:

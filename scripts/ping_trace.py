@@ -1,4 +1,4 @@
-"""Capture and analyze ping telemetry for GameMonitor."""
+"""Capture and analyze ping telemetry for GamerMonitor."""
 
 from __future__ import annotations
 
@@ -214,7 +214,7 @@ def summarize(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Capture and analyze GameMonitor ping telemetry.")
+    parser = argparse.ArgumentParser(description="Capture and analyze GamerMonitor ping telemetry.")
     parser.add_argument("--duration", type=int, default=60, help="Capture duration in seconds.")
     parser.add_argument("--interval", type=float, default=2.0, help="Sampling interval in seconds.")
     parser.add_argument("--output", type=str, default="ping_trace.jsonl", help="Output JSONL file.")

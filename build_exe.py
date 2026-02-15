@@ -11,7 +11,7 @@ if __name__ == '__main__':
     PyInstaller.__main__.run([
         'main.py',
         '--paths=src',
-        '--name=GameMonitor',
+        '--name=GamerMonitor',
         '--onefile',
         '--windowed',
         '--icon=resources/icon.ico',

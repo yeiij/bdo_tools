@@ -80,6 +80,57 @@ class TestPsutilProcessService(unittest.TestCase):
             self.assertTrue(result)
             mock_proc.cpu_affinity.assert_called_with([2, 3])
 
+    @patch('psutil.Process')
+    @patch('psutil.process_iter')
+    def test_set_priority_applies_to_all_matching_processes(self, mock_iter, mock_process_cls):
+        p1 = MagicMock()
+        p1.info = {'name': 'Discord.exe', 'pid': 111}
+        p2 = MagicMock()
+        p2.info = {'name': 'discord.exe', 'pid': 222}
+        p3 = MagicMock()
+        p3.info = {'name': 'Other.exe', 'pid': 333}
+        mock_iter.return_value = [p1, p2, p3]
+
+        proc111 = MagicMock()
+        proc222 = MagicMock()
+        proc333 = MagicMock()
+        pid_map = {111: proc111, 222: proc222, 333: proc333}
+        mock_process_cls.side_effect = lambda pid: pid_map[pid]
+
+        with patch('platform.system', return_value="Windows"):
+            with patch('psutil.IDLE_PRIORITY_CLASS', 64, create=True), \
+                    patch('psutil.BELOW_NORMAL_PRIORITY_CLASS', 16384, create=True), \
+                    patch('psutil.NORMAL_PRIORITY_CLASS', 32, create=True), \
+                    patch('psutil.ABOVE_NORMAL_PRIORITY_CLASS', 32768, create=True), \
+                    patch('psutil.HIGH_PRIORITY_CLASS', 128, create=True), \
+                    patch('psutil.REALTIME_PRIORITY_CLASS', 256, create=True):
+                result = self.service.set_priority('discord.exe', "High")
+
+        self.assertTrue(result)
+        proc111.nice.assert_called_once_with(128)
+        proc222.nice.assert_called_once_with(128)
+        proc333.nice.assert_not_called()
+
+    @patch('psutil.Process')
+    @patch('psutil.process_iter')
+    def test_set_affinity_applies_to_all_matching_processes(self, mock_iter, mock_process_cls):
+        p1 = MagicMock()
+        p1.info = {'name': 'Discord.exe', 'pid': 111}
+        p2 = MagicMock()
+        p2.info = {'name': 'discord.exe', 'pid': 222}
+        mock_iter.return_value = [p1, p2]
+
+        proc111 = MagicMock()
+        proc222 = MagicMock()
+        pid_map = {111: proc111, 222: proc222}
+        mock_process_cls.side_effect = lambda pid: pid_map[pid]
+
+        result = self.service.set_affinity('discord.exe', [2, 3, 4])
+
+        self.assertTrue(result)
+        proc111.cpu_affinity.assert_called_once_with([2, 3, 4])
+        proc222.cpu_affinity.assert_called_once_with([2, 3, 4])
+
     def test_is_admin(self):
         # Mock ctypes only on Windows or if it exists
         import sys

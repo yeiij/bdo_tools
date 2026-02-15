@@ -4,7 +4,7 @@ This repository is a Windows desktop monitor for Black Desert Online (BDO), buil
 
 ## Scope
 
-- App name: `GameMonitor`
+- App name: `GamerMonitor`
 - Domain focus: process optimization + telemetry (CPU/GPU/RAM/VRAM + network latency)
 - Primary target: Windows with optional ExitLag integration
 
@@ -27,22 +27,30 @@ The `MainViewModel` is the main orchestration layer. UI should not directly depe
 ## Settings and Persistence
 
 - Default settings file:
-  - Windows: `%LOCALAPPDATA%/GameMonitor/settings.json`
-- Legacy fallback read paths still supported:
-  - `game.monitor.json`
-  - `bdo.monitor.json`
+  - Windows: `%LOCALAPPDATA%/GamerMonitor/settings.json`
 - Important:
+  - The app does not overwrite an existing settings file on startup.
   - `MainViewModel(..., persist_settings_on_init=True)` writes settings on init.
   - In tests, use `persist_settings_on_init=False` to avoid writing test values to real config.
+  - `targets` entries are strict and only support:
+    - `process`
+    - `role`
+    - `priority`
+    - `affinity`
+  - Extra fields are ignored.
 
 ## Ping Logic (Current)
 
 - Network adapter measures TCP connect-time (not ICMP).
 - Ping source precedence:
-  1. If ExitLag is active: use external connections of `ExitLag.exe` (non-loopback), median latency.
+  1. If the `network` role process is active: use its external connections (non-loopback), median latency.
   2. Otherwise use game connections classified as `Game Server`.
   3. Keep last valid ping as carry when a sample is temporarily missing.
-- ExitLag local proxy hops (`127.0.0.1`/`::1`) are annotated to `Game Server` in the viewmodel when applicable.
+- Local proxy hops (`127.0.0.1`/`::1`) are annotated to `Game Server` in the viewmodel when applicable.
+- UI ping metrics:
+  - `Ping Now`: current value
+  - `Ping Low`: min over a 5-minute rolling window
+  - `Ping Peak`: max over a 5-minute rolling window
 
 ## Developer Commands
 

@@ -1,4 +1,4 @@
-# GameMonitor
+# GamerMonitor
 
 ![Version](https://img.shields.io/badge/version-1.1.2-blue)
 ![Python](https://img.shields.io/badge/python-3.14%2B-blue)
@@ -8,14 +8,14 @@
 
 ![Screenshot](resources/bdo_monitor.png)
 
-**GameMonitor** is a high-performance network analyzer and process optimizer specifically designed for **Black Desert Online**. Built with clean hexagonal architecture, it provides real-time latency monitoring, intelligent traffic filtering, and one-click system optimizations.
+**GamerMonitor** is a high-performance network analyzer and process optimizer specifically designed for **Black Desert Online**. Built with clean hexagonal architecture, it provides real-time latency monitoring, intelligent traffic filtering, and one-click system optimizations.
 
 ---
 
 ## ✨ Features
 
 ### 🎯 Core Functionality
-- **Smart Latency Monitoring**: Automatically detects game server connections (configurable ports) and calculates real ping, filtering out web/auth traffic
+- **Smart Latency Monitoring**: Automatically detects game server connections (configurable ports) and calculates TCP-based latency with `Ping Now`, `Ping Low`, and `Ping Peak`
 - **Process Optimization**:
   - **CPU Priority**: Manual configuration to set BDO process to High Priority
   - **CPU Affinity**: Manually configurable to exclude specific cores (e.g., cores 0 and 1) to reduce system jitter
@@ -124,7 +124,7 @@ bdo_tools/
 ### For End Users (Windows)
 
 #### Option 1: Download Pre-built Executable
-1. Download `GameMonitor.exe` from [Releases](https://github.com/yeiij/bdo_tools/releases)
+1. Download `GamerMonitor.exe` from [Releases](https://github.com/yeiij/bdo_tools/releases)
 2. **Right-click** → **Run as Administrator**
 3. Done! The app will appear in your system tray
 
@@ -144,7 +144,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 # 4. Build executable
 uv run python build_exe.py
 
-# 5. Find executable in dist/GameMonitor.exe
+# 5. Find executable in dist/GamerMonitor.exe
 ```
 
 ---
@@ -210,19 +210,35 @@ Run `make coverage` to see current coverage statistics.
 
 ### Application Settings
 
-Settings are auto-saved to `%LOCALAPPDATA%/GameMonitor/settings.json` (Windows):
+Settings are auto-saved to `%LOCALAPPDATA%/GamerMonitor/settings.json` (Windows):
 
 ```json
 {
-  "game_process_name": "BlackDesert64.exe",
-  "network_process_name": "ExitLag.exe",
-  "poll_interval_ms": 4000,
-  "game_target_priority": "High",
-  "game_target_affinity": [2, 3, 4, 5, 6, 7],
-  "network_target_priority": "High",
-  "network_target_affinity": [2, 3, 4, 5, 6, 7]
+  "interval": 4000,
+  "theme": "dark",
+  "targets": [
+    {
+      "process": "BlackDesert64.exe",
+      "role": "game",
+      "priority": "High",
+      "affinity": [2, 3, 4, 5, 6, 7]
+    },
+    {
+      "process": "ExitLag.exe",
+      "role": "network",
+      "priority": "High",
+      "affinity": [2, 3, 4, 5, 6, 7]
+    }
+  ]
 }
 ```
+
+Rules for `targets` entries:
+- Required keys: `process`, `role`
+- Optional keys: `priority`, `affinity`
+- Supported roles: `game`, `network`, `other`
+- Extra keys are ignored
+- `process` is mandatory; entries without `process` are ignored
 
 ### Customization
 
@@ -291,7 +307,7 @@ uv run python build_exe.py
 - `--add-data`: Include resources folder
 - `--collect-all=sv_ttk`: Sun Valley theme
 
-**Output**: `dist/GameMonitor.exe` (~15MB)
+**Output**: `dist/GamerMonitor.exe` (~15MB)
 
 ---
 
@@ -307,7 +323,11 @@ uv run python build_exe.py
 → Ensure the network process name in settings matches your VPN (e.g., `ExitLag.exe`)
 
 ### "Ping differs from ExitLag"
-→ GameMonitor estimates latency from live TCP connection timing; ExitLag may display a different (smoothed/endpoint-specific) value
+→ GamerMonitor estimates latency from live TCP connection timing and shows:
+- `Ping Now`: current latency
+- `Ping Low`: minimum over last 5 minutes
+- `Ping Peak`: maximum over last 5 minutes
+ExitLag may display a different (smoothed/endpoint-specific) value
 
 ### Application doesn't minimize to tray
 → Check if `resources/icon.ico` exists. Rebuild with `make build`
@@ -342,7 +362,7 @@ Contributions welcome! Please follow these guidelines:
 |-------------------|----------------|
 | **Lines of Code** | ~2,000        |
 | **Test Coverage** | 99.59%        |
-| **Tests**         | 88 (all passing)|
+| **Tests**         | 109 (all passing)|
 | **Dependencies**  | 7 core + 4 dev |
 | **Build Size**    | ~15MB         |
 | **Python**        | 3.14+         |
@@ -358,7 +378,7 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 ## 👤 Author
 
 **Created by**: Yeiij  
-**Project**: GameMonitor (BDO Tools)  
+**Project**: GamerMonitor (BDO Tools)  
 **Repository**: [github.com/yeiij/bdo_tools](https://github.com/yeiij/bdo_tools)
 
 ---
