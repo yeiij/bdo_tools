@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from domain.services import IGpuService
+
 _pynvml: Any = None
 try:
     import pynvml as imported_pynvml
@@ -10,8 +12,6 @@ except ImportError:
     pass
 
 pynvml: Any = _pynvml
-
-from domain.services import IGpuService
 
 
 class NvidiaGpuService(IGpuService):
